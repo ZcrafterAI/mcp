@@ -1,0 +1,53 @@
+{
+  "name": "@zcrafterai/mcp",
+  "version": "2.5.0",
+  "description": "MCP server for IBM z/OS jobs, datasets, USS, and operational diagnostics via the Zowe SDK.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "zcrafter-mcp": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "config",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mainframe",
+    "zos",
+    "zowe",
+    "ibm-z",
+    "zosmf",
+    "ai"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "@zowe/core-for-zowe-sdk": "^8.0.0",
+    "@zowe/imperative": "^8.0.0",
+    "@zowe/zos-files-for-zowe-sdk": "^8.0.0",
+    "@zowe/zos-jobs-for-zowe-sdk": "^8.0.0",
+    "@zowe/zosmf-for-zowe-sdk": "^8.0.0",
+    "pino": "^9.3.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}

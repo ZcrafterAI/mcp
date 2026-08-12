@@ -1,0 +1,42 @@
+{
+  "mcpServers": {
+    "mainframe": {
+      "command": "npx",
+      "args": ["-y", "@notharshhaa/mainframe-mcp-server"],
+      "env": {
+        "ZOSMF_HOST": "",
+        "ZOSMF_PORT": "443",
+        "ZOSMF_BASE_PATH": "",
+        "ZOSMF_USER": "",
+        "ZOSMF_PASSWORD": "",
+        "ZOSMF_TOKEN": "",
+        "ZOSMF_TOKEN_TYPE": "LTPA2",
+        "ZOSMF_REJECT_UNAUTHORIZED": "true",
+        "LOG_LEVEL": "info",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_SSE_PORT": "3000",
+        "MAX_JOB_OUTPUT_LINES": "5000",
+        "MAX_DATASET_READ_LINES": "2000",
+        "MAX_JES_SPOOL_FILES": "20",
+        "MAX_AUDIT_LINES": "500",
+        "CMCI_CONTEXT": "",
+        "CMCI_HOST": "",
+        "CMCI_PORT": "1490",
+        "DB2_LOCATION": "",
+        "DB2_HOST": "",
+        "DB2_PORT": "50400",
+        "SMF_SUMMARY_DATASET": "",
+        "RMF_METRICS_ENABLED": "true",
+        "RACF_AUDIT_USS_PATH": "",
+        "RACF_AUDIT_DATASET": "",
+        "SECURITY_READ_ONLY": "false",
+        "SECURITY_ALLOWED_TOOLS": "",
+        "SECURITY_BLOCKED_TOOLS": "",
+        "SECURITY_ALLOWED_DATASET_PATTERNS": "",
+        "SECURITY_ALLOWED_USS_PATHS": "",
+        "SECURITY_AUDIT_LOGGING": "true",
+        "SECURITY_MAX_JCL_BYTES": "65536"
+      }
+    }
+  }
+}

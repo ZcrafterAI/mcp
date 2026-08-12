@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "mainframe": {
+      "command": "npx",
+      "args": ["-y", "@notharshhaa/mainframe-mcp-server"],
+      "env": {
+        "ZOSMF_HOST": "",
+        "ZOSMF_PORT": "443",
+        "ZOSMF_USER": "",
+        "ZOSMF_PASSWORD": "",
+        "ZOSMF_TOKEN": "",
+        "ZOSMF_TOKEN_TYPE": "LTPA2",
+        "ZOSMF_REJECT_UNAUTHORIZED": "true",
+        "LOG_LEVEL": "info",
+        "SECURITY_READ_ONLY": "false",
+        "SECURITY_AUDIT_LOGGING": "true"
+      }
+    }
+  }
+}
