@@ -7,6 +7,8 @@ import { ConfigError, ConnectionError, normalizeError } from '../utils/errors.js
 
 export type EnterpriseEndpoint = 'zosmf' | 'cmci' | 'db2';
 
+let endpointSessions = new WeakMap<AppConfig, Map<EnterpriseEndpoint, Session>>();
+
 /** Resolve host/port/basePath for an enterprise endpoint. */
 export function resolveEndpoint(config: AppConfig, endpoint: EnterpriseEndpoint): { host: string; port: number; basePath: string; } {
     const { zosmf, enterprise } = config;
@@ -33,6 +35,9 @@ export function resolveEndpoint(config: AppConfig, endpoint: EnterpriseEndpoint)
 }
 /** Build a dedicated Session for a non-z/OSMF endpoint (CMCI, Db2 REST). */
 export function createEndpointSession(config: AppConfig, endpoint: EnterpriseEndpoint): Session {
+    const cached = endpointSessions.get(config)?.get(endpoint);
+    if (cached)
+        return cached;
     const { zosmf } = config;
     const { host, port, basePath } = resolveEndpoint(config, endpoint);
     const base = {
@@ -43,22 +48,37 @@ export function createEndpointSession(config: AppConfig, endpoint: EnterpriseEnd
         basePath: basePath || undefined,
     };
     if (zosmf.token) {
-        return new Session({
+        const session = new Session({
             ...base,
             type: 'token',
             tokenType: zosmf.tokenType ?? 'LTPA2',
             tokenValue: zosmf.token,
         });
+        cacheEndpointSession(config, endpoint, session);
+        return session;
     }
     if (zosmf.user && zosmf.password) {
-        return new Session({
+        const session = new Session({
             ...base,
             type: 'basic',
             user: zosmf.user,
             password: zosmf.password,
         });
+        cacheEndpointSession(config, endpoint, session);
+        return session;
     }
     throw new ConfigError('No usable authentication for enterprise REST endpoints.');
+}
+
+function cacheEndpointSession(config: AppConfig, endpoint: EnterpriseEndpoint, session: Session): void {
+    const cache = endpointSessions.get(config) ?? new Map<EnterpriseEndpoint, Session>();
+    cache.set(endpoint, session);
+    endpointSessions.set(config, cache);
+}
+
+/** Reset cached enterprise sessions (primarily for tests). */
+export function resetEndpointSessions(): void {
+    endpointSessions = new WeakMap<AppConfig, Map<EnterpriseEndpoint, Session>>();
 }
 /** GET and return a JSON body from an endpoint. */
 export async function getJson<T extends object>(session: Session, resource: string): Promise<T> {

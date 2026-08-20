@@ -23,6 +23,10 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/core.test.mjs",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "benchmark:live": "npm run build && node scripts/compare-live.mjs",
+    "check": "npm run typecheck && npm test",
     "clean": "rm -rf dist"
   },
   "keywords": [

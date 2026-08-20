@@ -1,8 +1,8 @@
 /**
  * Zowe session factory.
  *
- * Creates the single authenticated z/OSMF {@link Session} that every tool
- * shares. The session is lazy and connectionless until a tool issues a REST
+ * Creates an authenticated z/OSMF {@link Session} for each validated config.
+ * The session is lazy and connectionless until a tool issues a REST
  * call, so creation here cannot fail on a bad host — that surfaces on first use
  * and is mapped to a {@link ConnectionError} by the tool layer.
  */
@@ -11,15 +11,17 @@ import { Session } from '@zowe/imperative';
 import { childLogger } from '../utils/logger.js';
 import { ConnectionError } from '../utils/errors.js';
 import { describeConnection, resolveSessionConfig } from './profiles.js';
-let sharedSession: Session | undefined;
-/** Create (or return the cached) z/OSMF session. */
+let sessions = new WeakMap<AppConfig, Session>();
+/** Create (or return the cached) z/OSMF session for this config. */
 export function createSession(config: AppConfig): Session {
-    if (sharedSession)
-        return sharedSession;
+    const cached = sessions.get(config);
+    if (cached)
+        return cached;
     const log = childLogger('zowe');
     const sessionConfig = resolveSessionConfig(config);
     try {
-        sharedSession = new Session(sessionConfig);
+        const session = new Session(sessionConfig);
+        sessions.set(config, session);
     }
     catch (err) {
         throw new ConnectionError('Failed to create z/OSMF session.', {
@@ -30,9 +32,9 @@ export function createSession(config: AppConfig): Session {
     if (!config.zosmf.rejectUnauthorized) {
         log.warn('TLS certificate verification is DISABLED (ZOSMF_REJECT_UNAUTHORIZED=false).');
     }
-    return sharedSession;
+    return sessions.get(config)!;
 }
 /** Reset the cached session (primarily for tests). */
 export function resetSession(): void {
-    sharedSession = undefined;
+    sessions = new WeakMap<AppConfig, Session>();
 }

@@ -7,6 +7,7 @@ import { securedHandler } from '../../utils/tool-handler.js';
 import { formatStructuredResponse, renderTable, textResult } from '../../utils/formatters.js';
 import { fetchQuickFailureStep } from '../jobs/shared.js';
 import { findFailedJobs } from './shared.js';
+import { mapConcurrent } from '../../utils/async.js';
 /** Cap how many jobs we'll scan spool for (one DD each). */
 const MAX_STEP_LOOKUP = 15;
 const inputShape = {
@@ -25,20 +26,19 @@ export const registerFailedJobsTool: ToolRegistrar = (server, ctx) => {
         if (failures.length === 0) {
             return textResult(`Failed Jobs — Last ${window} Hours (0 found)`);
         }
-        const rows = [];
-        for (let i = 0; i < failures.length; i += 1) {
-            const { job, abendCode } = failures[i];
-            let step = '—';
-            if (i < MAX_STEP_LOOKUP) {
-                try {
-                    step = (await fetchQuickFailureStep(ctx, job.jobName, job.jobId)) ?? '—';
-                }
-                catch {
-                    step = '—';
-                }
+        const detailedFailures = failures.slice(0, MAX_STEP_LOOKUP);
+        const steps = await mapConcurrent(detailedFailures, ctx.config.limits.maxConcurrentRequests, async ({ job }) => {
+            try {
+                return (await fetchQuickFailureStep(ctx, job.jobName, job.jobId)) ?? '—';
             }
-            rows.push([job.jobName, job.jobId, abendCode ?? (job.returnCode ?? '—'), step]);
-        }
+            catch {
+                return '—';
+            }
+        });
+        const rows = failures.map(({ job, abendCode }, index) => {
+            const step = steps[index] ?? '—';
+            return [job.jobName, job.jobId, abendCode ?? (job.returnCode ?? '—'), step];
+        });
         ctx.logger.debug({ window, count: failures.length }, 'find_failed_jobs');
         const note = failures.length > MAX_STEP_LOOKUP
             ? `\n\n(Step detail shown for the first ${MAX_STEP_LOOKUP} jobs.)`

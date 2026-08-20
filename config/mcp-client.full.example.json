@@ -2,7 +2,7 @@
   "mcpServers": {
     "mainframe": {
       "command": "npx",
-      "args": ["-y", "@notharshhaa/mainframe-mcp-server"],
+      "args": ["-y", "@zcrafterai/mcp"],
       "env": {
         "ZOSMF_HOST": "",
         "ZOSMF_PORT": "443",
@@ -15,6 +15,7 @@
         "LOG_LEVEL": "info",
         "MCP_TRANSPORT": "stdio",
         "MCP_SSE_PORT": "3000",
+        "MAX_CONCURRENT_REQUESTS": "4",
         "MAX_JOB_OUTPUT_LINES": "5000",
         "MAX_DATASET_READ_LINES": "2000",
         "MAX_JES_SPOOL_FILES": "20",

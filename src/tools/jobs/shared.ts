@@ -12,6 +12,7 @@ import { GetJobs } from '@zowe/zos-jobs-for-zowe-sdk';
 import { NotFoundError, ValidationError, normalizeError } from '../../utils/errors.js';
 import { extractAbendCode, lookupAbend } from '../../utils/abend-codes.js';
 import { truncateLines } from '../../utils/formatters.js';
+import { mapConcurrent } from '../../utils/async.js';
 /** DD names most likely to contain the failure narrative, in priority order. */
 const DIAGNOSTIC_DDS = ['JESYSMSG', 'JESMSGLG', 'SYSOUT', 'SYSPRINT'];
 /** Convert a raw SDK status into our normalized {@link JobStatus}. */
@@ -151,12 +152,10 @@ export async function fetchDiagnosticSpool(ctx: ToolContext, jobName: string, jo
             DIAGNOSTIC_DDS.indexOf(b.ddName.toUpperCase()))
             .slice(0, ctx.config.limits.maxJesSpoolFiles);
     }
-    const out = [];
-    for (const file of ordered) {
+    return mapConcurrent(ordered, ctx.config.limits.maxConcurrentRequests, async (file) => {
         const text = await fetchSpoolContent(ctx, jobName, jobId, file.id);
-        out.push({ ddName: file.ddName, text });
-    }
-    return out;
+        return { ddName: file.ddName, text };
+    });
 }
 /** Max lines of spool text to scan when inferring a failing step quickly. */
 const QUICK_STEP_SCAN_LINES = 250;

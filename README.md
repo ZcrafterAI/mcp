@@ -141,6 +141,7 @@ tool, wired up through an `index.ts` registrar.
 | `ZOSMF_TOKEN` | yes\* | Token auth (alternative to user/password) |
 | `ZOSMF_PORT` | no | HTTPS port (default 443) |
 | `ZOSMF_REJECT_UNAUTHORIZED` | no | TLS verification (default `true`) |
+| `MAX_CONCURRENT_REQUESTS` | no | Parallel independent reads (default `4`, range `1`–`16`) |
 
 \* Provide either user/password or a token. The schema in `src/config/schema.ts`
 rejects a config with neither.
@@ -212,6 +213,9 @@ or changed in the schema directly.
 | --- | --- |
 | `npm run build` | Compile `src/` to `dist/` |
 | `npm run typecheck` | Type-check without emitting |
+| `npm test` | Build and run the core correctness and MCP contract tests |
+| `npm run benchmark` | Measure startup and simulated diagnostic-read latency |
+| `npm run check` | Run type-checking and all tests |
 | `npm run dev` | Watch mode |
 | `npm start` | Run the built server |
 | `npm run clean` | Remove `dist/` |

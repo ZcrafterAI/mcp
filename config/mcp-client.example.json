@@ -2,7 +2,7 @@
   "mcpServers": {
     "mainframe": {
       "command": "npx",
-      "args": ["-y", "@notharshhaa/mainframe-mcp-server"],
+      "args": ["-y", "@zcrafterai/mcp"],
       "env": {
         "ZOSMF_HOST": "",
         "ZOSMF_PORT": "443",
@@ -12,6 +12,7 @@
         "ZOSMF_TOKEN_TYPE": "LTPA2",
         "ZOSMF_REJECT_UNAUTHORIZED": "true",
         "LOG_LEVEL": "info",
+        "MAX_CONCURRENT_REQUESTS": "4",
         "SECURITY_READ_ONLY": "false",
         "SECURITY_AUDIT_LOGGING": "true"
       }

@@ -30,6 +30,7 @@ function readEnv() {
         },
         logLevel: process.env.LOG_LEVEL,
         limits: {
+            maxConcurrentRequests: process.env.MAX_CONCURRENT_REQUESTS,
             maxJobOutputLines: process.env.MAX_JOB_OUTPUT_LINES,
             maxDatasetReadLines: process.env.MAX_DATASET_READ_LINES,
             maxJesSpoolFiles: process.env.MAX_JES_SPOOL_FILES,

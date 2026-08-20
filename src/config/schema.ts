@@ -44,6 +44,7 @@ export const configSchema = z
         maxAuditLines: z.coerce.number().int().positive().default(500),
         maxJobListResults: z.coerce.number().int().positive().default(500),
         maxFailedJobResults: z.coerce.number().int().positive().default(100),
+        maxConcurrentRequests: z.coerce.number().int().min(1).max(16).default(4),
     }),
     enterprise: z.object({
         cmciHost: z.string().optional(),
