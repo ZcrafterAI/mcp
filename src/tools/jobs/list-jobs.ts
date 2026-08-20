@@ -56,7 +56,15 @@ export const listJobsTool = defineTool({
                 { prefix: normalizedPrefix },
             );
         }
-        let jobs = await listJobs(ctx, normalizedOwner, normalizedPrefix);
+        const limit = maxResults ?? ctx.config.limits.maxJobListResults;
+        // z/OSMF can apply ACTIVE and max-jobs itself. Do that only when no
+        // remaining client-side filter could otherwise change which rows make
+        // the final result.
+        const canCapAtServer = !returnCode && (!status || status === 'ACTIVE');
+        let jobs = await listJobs(ctx, normalizedOwner, normalizedPrefix, {
+            maxJobs: canCapAtServer ? limit : undefined,
+            activeOnly: status === 'ACTIVE',
+        });
         if (status) {
             jobs = jobs.filter((job) => job.status === status);
         }
@@ -65,7 +73,6 @@ export const listJobsTool = defineTool({
             jobs = jobs.filter((job) => (job.returnCode ?? '').toUpperCase().includes(upper));
         }
         const filteredTotal = jobs.length;
-        const limit = maxResults ?? ctx.config.limits.maxJobListResults;
         const capped = jobs.slice(0, limit);
         ctx.logger.debug(
             {

@@ -37,6 +37,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run build && node --test",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=82 --test-coverage-functions=85",
     "docs:tools": "npm run build && node scripts/generate-tool-docs.mjs",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "benchmark": "npm run build && node scripts/benchmark.mjs",

@@ -6,10 +6,15 @@ import { performance } from 'node:perf_hooks';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-const TOOL_CASES = [
-    { name: 'list_datasets', args: (o) => ({ hlq: o.hlq, maxResults: 100 }) },
-    { name: 'read_dataset', args: (o) => ({ dsn: o.dataset, member: o.member, maxLines: 200 }) },
-    { name: 'list_jobs', args: (o) => ({ owner: o.owner, maxResults: 50 }) },
+const BASE_TOOL_CASES = [
+    {
+        name: 'list_datasets',
+        args: (o) => ({ hlq: o.hlq, maxResults: o.datasetLimit }),
+    },
+    {
+        name: 'list_jobs',
+        args: (o) => ({ owner: o.owner, maxResults: o.jobLimit }),
+    },
 ];
 
 function usage() {
@@ -26,9 +31,16 @@ Options:
   --runs NUMBER        Timed attempts per tool (default: 5)
   --warmups NUMBER     Untimed warmups per tool (default: 1)
   --hlq VALUE          Dataset high-level qualifier (default: ZOSMF_USER)
-  --dataset VALUE      Dataset used for the read test
+  --dataset-limit N    Maximum datasets requested from each version (default: 100)
+  --dataset VALUE      Optional dataset used for a read-content comparison
   --member VALUE       Optional member used for the read test
+  --pds VALUE          Optional PDS/PDSE used for a member-list comparison
+  --member-limit N     Maximum PDS members requested from each version (default: 100)
   --owner VALUE        Job owner (default: ZOSMF_USER)
+  --job-limit N        Maximum jobs requested from each version (default: 50)
+  --job-id VALUE       Optional completed job used for status/spool comparisons
+  --uss-path VALUE     Optional USS directory used for a listing comparison
+  --uss-file VALUE     Optional USS text file used for a read comparison
   --help               Show this help
 
 The process inherits your existing ZOSMF_* environment variables. Secrets are
@@ -55,8 +67,9 @@ function parseArgs(argv) {
 function positiveInteger(value, fallback, label) {
     if (value === undefined) return fallback;
     const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0 || (label === 'runs' && parsed < 1)) {
-        throw new Error(`${label} must be ${label === 'runs' ? 'at least 1' : '0 or greater'}`);
+    const minimum = label === 'warmups' ? 0 : 1;
+    if (!Number.isInteger(parsed) || parsed < minimum) {
+        throw new Error(`${label} must be ${minimum === 0 ? '0 or greater' : 'at least 1'}`);
     }
     return parsed;
 }
@@ -159,6 +172,10 @@ function stats(samples) {
     };
 }
 
+function firstFailure(samples) {
+    return samples.find((sample) => !sample.ok)?.error;
+}
+
 function formatMs(value) {
     return Number.isFinite(value) ? `${value.toFixed(0)} ms` : 'n/a';
 }
@@ -185,10 +202,12 @@ function correctness(name, baseline, candidate, options) {
     if (name === 'list_datasets') {
         const baselineNames = datasetNames(b.text);
         const candidateNames = datasetNames(c.text);
-        const expected = options.dataset.toUpperCase();
         const same = JSON.stringify(baselineNames) === JSON.stringify(candidateNames);
+        const includesExpected = options.dataset
+            ? candidateNames.includes(options.dataset.toUpperCase())
+            : true;
         return {
-            pass: same && candidateNames.includes(expected),
+            pass: same && includesExpected,
             note: same ? `${candidateNames.length} matching names` : 'dataset lists differ',
         };
     }
@@ -200,7 +219,12 @@ function correctness(name, baseline, candidate, options) {
             note: candidateText === baselineText ? 'content matches' : 'content differs',
         };
     }
-    return { pass: normalizedContent(c.text).length > 0, note: 'request completed' };
+    const baselineText = normalizedContent(b.text);
+    const candidateText = normalizedContent(c.text);
+    return {
+        pass: candidateText.length > 0 && candidateText === baselineText,
+        note: candidateText === baselineText ? 'output matches' : 'output differs',
+    };
 }
 
 function delta(candidate, baseline) {
@@ -229,12 +253,55 @@ async function main() {
         runs: positiveInteger(raw.runs, 5, 'runs'),
         warmups: positiveInteger(raw.warmups, 1, 'warmups'),
         hlq: (raw.hlq ?? user).toUpperCase(),
+        datasetLimit: positiveInteger(raw['dataset-limit'], 100, 'dataset-limit'),
         dataset: (raw.dataset ?? '').toUpperCase(),
         member: raw.member?.toUpperCase(),
+        pds: (raw.pds ?? '').toUpperCase(),
+        memberLimit: positiveInteger(raw['member-limit'], 100, 'member-limit'),
         owner: (raw.owner ?? user).toUpperCase(),
+        jobLimit: positiveInteger(raw['job-limit'], 50, 'job-limit'),
+        jobId: (raw['job-id'] ?? '').toUpperCase(),
+        ussPath: raw['uss-path'] ?? '',
+        ussFile: raw['uss-file'] ?? '',
     };
     if (!options.hlq) throw new Error('Provide --hlq or set ZOSMF_USER');
-    if (!options.dataset) throw new Error('Provide --dataset for the read correctness test');
+    const toolCases = [...BASE_TOOL_CASES];
+    if (options.dataset) {
+        toolCases.splice(1, 0, {
+            name: 'read_dataset',
+            args: (o) => ({ dsn: o.dataset, member: o.member, maxLines: 200 }),
+        });
+    }
+    if (options.pds) {
+        toolCases.push({
+            name: 'search_members',
+            args: (o) => ({ dsn: o.pds, maxResults: o.memberLimit, sortBy: 'name' }),
+        });
+    }
+    if (options.jobId) {
+        toolCases.push(
+            {
+                name: 'get_job_status',
+                args: (o) => ({ jobId: o.jobId }),
+            },
+            {
+                name: 'get_job_output',
+                args: (o) => ({ jobId: o.jobId }),
+            },
+        );
+    }
+    if (options.ussPath) {
+        toolCases.push({
+            name: 'list_uss_directory',
+            args: (o) => ({ path: o.ussPath, maxResults: 100, sortBy: 'name' }),
+        });
+    }
+    if (options.ussFile) {
+        toolCases.push({
+            name: 'read_uss_file',
+            args: (o) => ({ path: o.ussFile, maxLines: 200 }),
+        });
+    }
 
     console.log('\nZcrafter MCP live A/B proof (read-only)');
     console.log(`Runs: ${options.runs} timed + ${options.warmups} warmup per operation\n`);
@@ -244,7 +311,7 @@ async function main() {
         servers.push(await openServer('baseline', options.baseline));
         servers.push(await openServer('candidate', options.candidate));
 
-        const requiredTools = [...TOOL_CASES.map((test) => test.name), 'verify_zosmf_connection'];
+        const requiredTools = [...toolCases.map((test) => test.name), 'verify_zosmf_connection'];
         for (const server of servers) {
             const tools = await server.client.listTools();
             const names = new Set(tools.tools.map((tool) => tool.name));
@@ -261,7 +328,7 @@ async function main() {
             invalid[server.label] = await timedCall(server, 'list_datasets', {});
 
         const results = [];
-        for (const test of TOOL_CASES) {
+        for (const test of toolCases) {
             const samples = await pairedCalls(
                 servers,
                 test.name,
@@ -286,7 +353,9 @@ async function main() {
             [
                 'Both connect',
                 verifyPass ? 'PASS' : 'FAIL',
-                verifyPass ? 'z/OSMF reachable' : 'connection failure',
+                verifyPass
+                    ? 'z/OSMF reachable'
+                    : `baseline: ${verify.baseline.error ?? 'ok'}; candidate: ${verify.candidate.error ?? 'ok'}`,
             ],
             ...results.map((result) => [
                 result.name,
@@ -307,7 +376,9 @@ async function main() {
                 'Baseline median',
                 'Candidate median',
                 'Change',
+                'Baseline p95',
                 'Candidate p95',
+                'p95 change',
                 'Failures',
             ],
             ...results.map((result) => [
@@ -315,10 +386,24 @@ async function main() {
                 formatMs(result.baseline.median),
                 formatMs(result.candidate.median),
                 delta(result.candidate.median, result.baseline.median),
+                formatMs(result.baseline.p95),
                 formatMs(result.candidate.p95),
+                delta(result.candidate.p95, result.baseline.p95),
                 `${result.candidate.failures}/${options.runs}`,
             ]),
         ]);
+
+        const failedOperations = results.filter(
+            (result) => result.baseline.failures > 0 || result.candidate.failures > 0,
+        );
+        if (failedOperations.length > 0) {
+            console.log('\nFailure details (redacted)');
+            for (const result of failedOperations) {
+                console.log(
+                    `${result.name}: baseline=${firstFailure(result.samples.baseline) ?? 'ok'}; candidate=${firstFailure(result.samples.candidate) ?? 'ok'}`,
+                );
+            }
+        }
 
         const correctnessPass =
             verifyPass && invalidPass && results.every((result) => result.correctness.pass);
@@ -328,15 +413,33 @@ async function main() {
                 Number.isFinite(result.candidate.median) &&
                 result.candidate.median > result.baseline.median * 1.15,
         );
+        const p95Regressions =
+            options.runs >= 10
+                ? results.filter(
+                      (result) =>
+                          Number.isFinite(result.candidate.p95) &&
+                          result.candidate.p95 > result.baseline.p95 * 1.5,
+                  )
+                : [];
+        const performancePass = regressions.length === 0;
 
-        console.log(`\nVerdict: ${correctnessPass && reliabilityPass ? 'PASS' : 'FAIL'}`);
+        console.log(
+            `\nVerdict: ${correctnessPass && reliabilityPass && performancePass ? 'PASS' : 'FAIL'}`,
+        );
         console.log(
             regressions.length
                 ? `Performance warning: >15% median regression in ${regressions.map((result) => result.name).join(', ')}.`
                 : 'No median performance regression above 15%.',
         );
+        if (p95Regressions.length) {
+            console.log(
+                `Tail-latency warning: >50% p95 regression in ${p95Regressions.map((result) => result.name).join(', ')}.`,
+            );
+        } else if (options.runs >= 10) {
+            console.log('No p95 performance regression above 50%.');
+        }
 
-        if (!correctnessPass || !reliabilityPass) process.exitCode = 1;
+        if (!correctnessPass || !reliabilityPass || !performancePass) process.exitCode = 1;
     } finally {
         await Promise.allSettled(servers.map((server) => server.client.close()));
     }

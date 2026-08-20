@@ -86,15 +86,21 @@ export function assertValidMemberName(name: string): void {
     }
 }
 /** List datasets matching a pattern (e.g. "SYS1.*"). */
-export async function listDatasets(ctx: ToolContext, pattern: string): Promise<Dataset[]> {
-    const response = await retryReadOnly(() => List.dataSet(ctx.session, pattern, { attributes: true }));
+export async function listDatasets(
+    ctx: ToolContext,
+    pattern: string,
+    maxLength?: number,
+): Promise<Dataset[]> {
+    const response = await retryReadOnly(() =>
+        List.dataSet(ctx.session, pattern, { attributes: true, maxLength }),
+    );
     return listItems<RawDataset>(response)
         .map(normalizeDataset)
         .filter((ds) => ds.name.length > 0);
 }
 /** List members of a PDS (basic — name and dates only). */
 export async function listMembers(ctx: ToolContext, dsn: string): Promise<Member[]> {
-    const response = await List.allMembers(ctx.session, dsn, {});
+    const response = await retryReadOnly(() => List.allMembers(ctx.session, dsn, {}));
     return listItems<RawMember>(response)
         .map(normalizeMember)
         .filter((m) => m.name.length > 0);
@@ -104,7 +110,9 @@ export async function listMembers(ctx: ToolContext, dsn: string): Promise<Member
  * Requires the member have statistics turned on in the PDS directory.
  */
 export async function listMembersWithStats(ctx: ToolContext, dsn: string): Promise<Member[]> {
-    const response = await List.allMembers(ctx.session, dsn, { attributes: true });
+    const response = await retryReadOnly(() =>
+        List.allMembers(ctx.session, dsn, { attributes: true }),
+    );
     return listItems<RawMember>(response)
         .map(normalizeMember)
         .filter((m) => m.name.length > 0);
@@ -118,7 +126,7 @@ export async function readDataset(
 ): Promise<string> {
     const target = member ? `${dsn}(${member})` : dsn;
     const options = encoding === 'ibm1047' ? { responseTimeout: 60000 } : {};
-    const buffer = await Get.dataSet(ctx.session, target, options);
+    const buffer = await retryReadOnly(() => Get.dataSet(ctx.session, target, options));
     if (buffer == null) {
         throw new NotFoundError(`Dataset ${target} could not be read or is empty.`, { target });
     }

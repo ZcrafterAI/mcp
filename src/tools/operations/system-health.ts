@@ -15,6 +15,7 @@ import { formatStructuredResponse, renderTable, textResult } from '../../utils/f
 import { isFailedJob, normalizeJob } from '../jobs/shared.js';
 import { aggregateAbends, findFailedJobs } from './shared.js';
 import { extractAbendCode, lookupAbend } from '../../parsers/abend-codes.js';
+import { retryReadOnly } from '../../utils/async.js';
 const inputShape = {
     lookbackHours: z
         .number()
@@ -36,7 +37,9 @@ export const systemHealthSummaryTool = defineTool({
     input: inputShape,
     async run({ lookbackHours }, ctx) {
         // Always fetch the live job queue for counts
-        const raws = await GetJobs.getJobsByOwnerAndPrefix(ctx.session, '*', '*');
+        const raws = await retryReadOnly(() =>
+            GetJobs.getJobsByOwnerAndPrefix(ctx.session, '*', '*'),
+        );
         const jobs = raws.map(normalizeJob);
         const active = jobs.filter((job) => job.status === 'ACTIVE');
         const inputQ = jobs.filter((job) => job.status === 'INPUT');

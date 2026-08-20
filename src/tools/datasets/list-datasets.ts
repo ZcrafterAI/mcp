@@ -50,7 +50,10 @@ export const listDatasetsTool = defineTool({
         }
         assertDatasetAllowed(ctx.config, normalizedHlq);
         const search = buildDatasetPattern(normalizedHlq, pattern);
-        let datasets = await listDatasets(ctx, search);
+        // When no client-side DSORG filter is needed, let z/OSMF cap the
+        // response instead of downloading the full catalog result and
+        // discarding most of it locally.
+        let datasets = await listDatasets(ctx, search, dsorg ? undefined : maxResults);
         if (dsorg) {
             datasets = datasets.filter((ds) => (ds.dsorg ?? '').toUpperCase().startsWith(dsorg));
         }

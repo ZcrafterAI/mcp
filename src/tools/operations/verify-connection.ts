@@ -6,6 +6,7 @@ import { GetJobs } from '@zowe/zos-jobs-for-zowe-sdk';
 import { getJson } from '../../zowe/rest-client.js';
 import { formatStructuredResponse, textResult } from '../../utils/formatters.js';
 import { describeConnection } from '../../zowe/session.js';
+import { retryReadOnly } from '../../utils/async.js';
 
 const inputShape = {};
 
@@ -15,7 +16,9 @@ export const verifyZosmfConnectionTool = defineTool({
     input: inputShape,
     async run(_args, ctx) {
         const owner = ctx.config.zosmf.user ?? '*';
-        const jobs = await GetJobs.getJobsByOwnerAndPrefix(ctx.session, owner, '*');
+        const jobs = await retryReadOnly(() =>
+            GetJobs.getJobsByOwnerAndPrefix(ctx.session, owner, '*'),
+        );
         let zosmfVersion = 'unknown';
         try {
             const info = await getJson<{ zosmf_version?: string; version?: string }>(

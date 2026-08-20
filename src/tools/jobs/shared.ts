@@ -12,8 +12,7 @@ import { GetJobs } from '@zowe/zos-jobs-for-zowe-sdk';
 import { NotFoundError, ValidationError, normalizeError } from '../../utils/errors.js';
 import { extractAbendCode, lookupAbend } from '../../parsers/abend-codes.js';
 import { truncateLines } from '../../utils/formatters.js';
-import { mapConcurrent } from '../../utils/async.js';
-import { retryReadOnly } from '../../utils/async.js';
+import { mapConcurrent, retryReadOnly } from '../../utils/async.js';
 import { isFailedJob } from '../../utils/job-status.js';
 
 export { isFailedJob };
@@ -79,7 +78,7 @@ export function assertValidJobId(jobId: string): void {
 /** Fetch a single raw job by JES id, mapping a miss to a {@link NotFoundError}. */
 export async function fetchRawJob(ctx: ToolContext, jobId: string): Promise<IJob> {
     try {
-        const job = await GetJobs.getJob(ctx.session, jobId);
+        const job = await retryReadOnly(() => GetJobs.getJob(ctx.session, jobId));
         if (!job) throw new NotFoundError(`No job found with id ${jobId}.`, { jobId });
         return job;
     } catch (err) {
@@ -97,8 +96,20 @@ export async function fetchJob(ctx: ToolContext, jobId: string): Promise<Job> {
     return normalizeJob(await fetchRawJob(ctx, jobId));
 }
 /** List jobs by owner/prefix and normalize them. */
-export async function listJobs(ctx: ToolContext, owner: string, prefix: string): Promise<Job[]> {
-    const jobs = await GetJobs.getJobsByOwnerAndPrefix(ctx.session, owner, prefix);
+export async function listJobs(
+    ctx: ToolContext,
+    owner: string,
+    prefix: string,
+    options: { maxJobs?: number; activeOnly?: boolean } = {},
+): Promise<Job[]> {
+    const jobs = await retryReadOnly(() =>
+        GetJobs.getJobsByParameters(ctx.session, {
+            owner,
+            prefix,
+            maxJobs: options.maxJobs,
+            status: options.activeOnly ? 'ACTIVE' : undefined,
+        }),
+    );
     return jobs.map(normalizeJob);
 }
 /** When JES returns multiple spool files for the same DD, keep the newest (highest id). */
@@ -119,7 +130,7 @@ export async function fetchSpoolFiles(
     jobName: string,
     jobId: string,
 ): Promise<SpoolFile[]> {
-    const files = await GetJobs.getSpoolFiles(ctx.session, jobName, jobId);
+    const files = await retryReadOnly(() => GetJobs.getSpoolFiles(ctx.session, jobName, jobId));
     return latestSpoolFilesByDd(files.map(normalizeSpoolFile));
 }
 /** Download the text content of a single spool file. */
@@ -129,7 +140,7 @@ export async function fetchSpoolContent(
     jobId: string,
     spoolId: number,
 ): Promise<string> {
-    return GetJobs.getSpoolContentById(ctx.session, jobName, jobId, spoolId);
+    return retryReadOnly(() => GetJobs.getSpoolContentById(ctx.session, jobName, jobId, spoolId));
 }
 /** Try to pull the most diagnostic spool text for a job (capped by config). */
 export async function fetchDiagnosticSpool(

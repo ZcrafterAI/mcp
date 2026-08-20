@@ -25,7 +25,22 @@ export async function mapConcurrent<T, R>(
     return results;
 }
 
-const retryableReadStatuses = new Set([429, 500, 502, 503, 504]);
+const retryableReadStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+const retryableReadCodes = new Set([
+    'ECONNABORTED',
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'EHOSTUNREACH',
+    'ENETDOWN',
+    'ENETUNREACH',
+    'ENOTFOUND',
+    'EPIPE',
+    'ETIMEDOUT',
+    'UND_ERR_CONNECT_TIMEOUT',
+    'UND_ERR_HEADERS_TIMEOUT',
+    'UND_ERR_SOCKET',
+]);
 
 const nonRetryableReadTerms = [
     'unauthorized',
@@ -52,16 +67,39 @@ const retryableReadTerms = [
 ];
 
 export interface ReadRetryOptions {
-    delayMs?: number;
+    retries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
     sleep?: (delayMs: number) => Promise<void>;
 }
 
 function errorText(error: unknown): string {
     if (error instanceof Error) {
-        return error.message.toLowerCase();
+        const details = (error as { mDetails?: { msg?: unknown; additionalDetails?: unknown } })
+            .mDetails;
+        const detailText = [details?.msg, details?.additionalDetails]
+            .filter((value): value is string => typeof value === 'string')
+            .join(' ');
+        const cause = error.cause ? ` ${errorText(error.cause)}` : '';
+        return `${error.name} ${error.message} ${detailText}${cause}`.toLowerCase();
     }
 
     return String(error).toLowerCase();
+}
+
+function errorCode(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null) return undefined;
+    const candidate = error as {
+        code?: unknown;
+        cause?: unknown;
+        mDetails?: { errno?: unknown; errorCode?: unknown; causeErrors?: unknown };
+    };
+    for (const code of [candidate.code, candidate.mDetails?.errno, candidate.mDetails?.errorCode]) {
+        if (typeof code === 'string' && !/^\d{3}$/.test(code)) return code.toUpperCase();
+    }
+    const detailCause = candidate.mDetails?.causeErrors;
+    if (detailCause) return errorCode(detailCause);
+    return candidate.cause ? errorCode(candidate.cause) : undefined;
 }
 
 function errorStatus(error: unknown): number | undefined {
@@ -70,16 +108,22 @@ function errorStatus(error: unknown): number | undefined {
             status?: unknown;
             statusCode?: unknown;
             response?: { status?: unknown };
+            mDetails?: { httpStatus?: unknown; errorCode?: unknown };
         };
 
-        for (const status of [candidate.status, candidate.statusCode, candidate.response?.status]) {
-            if (typeof status === 'number') {
-                return status;
-            }
+        for (const status of [
+            candidate.status,
+            candidate.statusCode,
+            candidate.response?.status,
+            candidate.mDetails?.httpStatus,
+            candidate.mDetails?.errorCode,
+        ]) {
+            if (typeof status === 'number') return status;
+            if (typeof status === 'string' && /^\d{3}$/.test(status)) return Number(status);
         }
     }
 
-    const match = errorText(error).match(/\b(?:http(?:\(s\))?\s*(?:status\s*)?)?(\d{3})\b/);
+    const match = errorText(error).match(/\bhttp(?:\(s\))?\s*(?:status\s*)?(\d{3})\b/);
     return match ? Number(match[1]) : undefined;
 }
 
@@ -95,6 +139,11 @@ export function isRetryableReadError(error: unknown): boolean {
         return retryableReadStatuses.has(status);
     }
 
+    const code = errorCode(error);
+    if (code !== undefined) {
+        return retryableReadCodes.has(code);
+    }
+
     return retryableReadTerms.some((term) => text.includes(term));
 }
 
@@ -103,7 +152,9 @@ function sleep(delayMs: number): Promise<void> {
 }
 
 /**
- * Retry one safe read after a temporary upstream failure.
+ * Retry a safe read after temporary upstream failures using capped exponential
+ * backoff. The default is one retry, which improves resilience without making
+ * an interactive command wait through a long retry storm.
  *
  * Never use this helper for a write, delete, submit, or authentication
  * operation: callers must pass only idempotent reads.
@@ -112,14 +163,20 @@ export async function retryReadOnly<T>(
     operation: () => Promise<T>,
     options: ReadRetryOptions = {},
 ): Promise<T> {
-    try {
-        return await operation();
-    } catch (error) {
-        if (!isRetryableReadError(error)) {
-            throw error;
-        }
+    const retries = Math.max(0, Math.floor(options.retries ?? 1));
+    const baseDelayMs = Math.max(0, options.baseDelayMs ?? 125);
+    const maxDelayMs = Math.max(baseDelayMs, options.maxDelayMs ?? 1_000);
 
-        await (options.sleep ?? sleep)(options.delayMs ?? 125);
-        return operation();
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            if (attempt >= retries || !isRetryableReadError(error)) {
+                throw error;
+            }
+
+            const delayMs = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt);
+            await (options.sleep ?? sleep)(delayMs);
+        }
     }
 }

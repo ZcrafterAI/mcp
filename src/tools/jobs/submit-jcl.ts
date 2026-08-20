@@ -8,6 +8,7 @@ import { ValidationError } from '../../utils/errors.js';
 import { formatJobStatus, textResult } from '../../utils/formatters.js';
 import { assertJclSizeAllowed } from '../../policy/rules.js';
 import { normalizeJob } from './shared.js';
+import { retryReadOnly } from '../../utils/async.js';
 const inputShape = {
     jcl: z
         .string()
@@ -108,7 +109,7 @@ export const submitJclTool = defineTool({
             const start = Date.now();
             while (job.status !== 'OUTPUT' && Date.now() - start < timeoutSeconds * 1000) {
                 await new Promise((resolve) => setTimeout(resolve, 2000));
-                const rawJob = await GetJobs.getJob(ctx.session, job.jobId);
+                const rawJob = await retryReadOnly(() => GetJobs.getJob(ctx.session, job.jobId));
                 if (rawJob) {
                     job = normalizeJob(rawJob);
                 }

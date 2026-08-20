@@ -9,6 +9,7 @@ import type { ToolContext } from '../../types/tools.js';
 import { GetJobs } from '@zowe/zos-jobs-for-zowe-sdk';
 import { extractAbendCode } from '../../parsers/abend-codes.js';
 import { isFailedJob, normalizeJob } from '../jobs/shared.js';
+import { retryReadOnly } from '../../utils/async.js';
 
 /** A failed job enriched with the abend code parsed from its return code. */
 export interface FailedJobSummary {
@@ -35,7 +36,9 @@ export async function findFailedJobs(
     hours: number,
     owner: string = '*',
 ): Promise<FailedJobSummary[]> {
-    const raws = await GetJobs.getJobsByOwnerAndPrefix(ctx.session, owner, '*');
+    const raws = await retryReadOnly(() =>
+        GetJobs.getJobsByOwnerAndPrefix(ctx.session, owner, '*'),
+    );
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
     const maxResults = ctx.config.limits.maxFailedJobResults;
     const summaries = [];

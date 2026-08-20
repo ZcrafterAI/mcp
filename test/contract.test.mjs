@@ -74,3 +74,58 @@ test('an allow-list permits only the tools it names', async (t) => {
     const permitted = await client.callTool({ name: 'list_db2_subsystems', arguments: {} });
     assert.doesNotMatch(permitted.content[0].text, /FORBIDDEN/);
 });
+
+test('local abend lookup works end-to-end through the MCP contract', async (t) => {
+    const client = await connect(t, {});
+
+    const known = await client.callTool({ name: 'lookup_abend_code', arguments: { code: '0C7' } });
+    assert.equal(known.isError, undefined);
+    assert.match(known.content[0].text, /S0C7/);
+    assert.match(known.content[0].text, /Remediation|Fix:/);
+
+    const wrongCategory = await client.callTool({
+        name: 'lookup_abend_code',
+        arguments: { code: 'S0C7', category: 'user' },
+    });
+    assert.match(wrongCategory.content[0].text, /system code, not a user code/);
+
+    const unknown = await client.callTool({
+        name: 'lookup_abend_code',
+        arguments: { code: 'ZZZZ' },
+    });
+    assert.match(unknown.content[0].text, /No reference entry/);
+
+    const catalog = await client.callTool({
+        name: 'lookup_abend_code',
+        arguments: { search: 'storage', category: 'system' },
+    });
+    assert.match(catalog.content[0].text, /Abend Code Reference/);
+});
+
+test('security posture reports risky defaults through the MCP contract', async (t) => {
+    const client = await connect(t, {});
+    const result = await client.callTool({ name: 'security_posture_summary', arguments: {} });
+
+    assert.equal(result.isError, undefined);
+    assert.match(result.content[0].text, /Security Posture Summary/);
+    assert.match(result.content[0].text, /Audit logging/);
+    assert.match(result.content[0].text, /WRITE-TOOL REGISTRY/);
+    assert.match(result.content[0].text, /WARNING|CRITICAL/);
+
+    const hardenedClient = await connect(t, {
+        readOnly: 'true',
+        allowedTools:
+            'list_jobs,list_datasets,read_dataset,list_uss_directory,read_uss_file,lookup_abend_code,security_posture_summary',
+        blockedTools:
+            'submit_jcl,delete_dataset,write_dataset,delete_uss_file,write_uss_file,create_dataset',
+        allowedDatasetPatterns: 'DEV.*,TEST.*,QA.*,SANDBOX.*',
+        allowedUssPaths: '/u/dev,/u/test,/u/qa,/tmp/sandbox',
+    });
+    const hardened = await hardenedClient.callTool({
+        name: 'security_posture_summary',
+        arguments: {},
+    });
+    assert.match(hardened.content[0].text, /read-only/);
+    assert.match(hardened.content[0].text, /7 tools configured/);
+    assert.match(hardened.content[0].text, /6 tools blocked/);
+});

@@ -10,6 +10,7 @@
 import type { Session } from '@zowe/imperative';
 import { RestClient } from '@zowe/imperative';
 import { ConnectionError, normalizeError } from '../utils/errors.js';
+import { retryReadOnly } from '../utils/async.js';
 
 /** Network-level failures worth reporting as a connection problem. */
 const TRANSPORT_FAILURE = /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|certificate/i;
@@ -25,7 +26,7 @@ function asConnectionError(err: unknown, resource: string): Error {
 /** GET a JSON body. */
 export async function getJson<T extends object>(session: Session, resource: string): Promise<T> {
     try {
-        return await RestClient.getExpectJSON<T>(session, resource);
+        return await retryReadOnly(() => RestClient.getExpectJSON<T>(session, resource));
     } catch (err) {
         throw asConnectionError(err, resource);
     }
@@ -34,7 +35,7 @@ export async function getJson<T extends object>(session: Session, resource: stri
 /** GET a plain-text body (CMCI answers in XML, which arrives as text). */
 export async function getText(session: Session, resource: string): Promise<string> {
     try {
-        return await RestClient.getExpectString(session, resource);
+        return await retryReadOnly(() => RestClient.getExpectString(session, resource));
     } catch (err) {
         throw asConnectionError(err, resource);
     }

@@ -7,6 +7,7 @@ import { Get, List } from '@zowe/zos-files-for-zowe-sdk';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { listItems } from '../../zowe/response.js';
 import { assertUssPathAllowed } from '../../policy/rules.js';
+import { retryReadOnly } from '../../utils/async.js';
 
 /** Raw USS directory entry as returned by the z/OSMF files API. */
 interface RawUssItem {
@@ -110,7 +111,7 @@ export function sortUssEntries(
 export async function listUssDirectory(ctx: ToolContext, path: string): Promise<UssEntry[]> {
     validateAbsolutePath(path);
     assertUssPathAllowed(ctx.config, path);
-    const response = await List.fileList(ctx.session, path, {});
+    const response = await retryReadOnly(() => List.fileList(ctx.session, path, {}));
     return listItems<RawUssItem>(response)
         .map(normalizeUssEntry)
         .filter((entry) => entry.name && entry.name !== '.' && entry.name !== '..');
@@ -119,7 +120,7 @@ export async function listUssDirectory(ctx: ToolContext, path: string): Promise<
 export async function readUssFile(ctx: ToolContext, path: string): Promise<string> {
     validateAbsolutePath(path);
     assertUssPathAllowed(ctx.config, path);
-    const buffer = await Get.USSFile(ctx.session, path, {});
+    const buffer = await retryReadOnly(() => Get.USSFile(ctx.session, path, {}));
     if (buffer == null) {
         throw new NotFoundError(`USS file ${path} could not be read or is empty.`, { path });
     }
