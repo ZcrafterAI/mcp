@@ -2,28 +2,14 @@
 
 [![CI](https://github.com/ZcrafterAI/mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ZcrafterAI/mcp/actions/workflows/ci.yml)
 
-Let an AI assistant work with an IBM z/OS mainframe — submit jobs, read
-datasets, and explain why something failed — by asking in plain English.
+ZcrafterAI MCP is a tool designed to enhance the productivity of your coding agents by providing them with tools that assist them in reading, writing, and performing actions.
 
 This is an [MCP](https://modelcontextprotocol.io) server. Point any MCP client
 (Claude Code, Claude Desktop, Cursor, VS Code) at it, and the assistant gains
 **32 tools** that talk to your mainframe through z/OSMF using the
 [Zowe](https://www.zowe.org) SDK.
 
-## What you can ask it
-
-```
-Why did PAYJOB01 fail?
-  → ABEND S806 in STEP030. Module PAYRPTX was not found.
-    Check that PAYRPTX is compiled into the correct load library.
-
-Show me all the jobs that failed overnight
-Read SYS1.PROCLIB(IKJEFT01)
-Which batch jobs look likely to fail this week?
-```
-
-Nothing is invented: every answer comes from a real z/OSMF call. When the
-mainframe says no, the tool says so.
+<img width="3000" height="1000" alt="6770AD52-6CF4-4300-9BF8-2D1A6C96FB9C" src="https://github.com/user-attachments/assets/aa879b40-c571-4988-9e35-38d088acc29b" />
 
 ## Getting started
 
@@ -63,7 +49,7 @@ Ask the assistant to _"check the mainframe connection"_ to confirm it works.
 
 | Category                  | What it covers                                                     | Tools |
 | ------------------------- | ------------------------------------------------------------------ | ----- |
-| **Batch jobs**            | Submit work and follow it — status, output, and why it failed      | 6     |
+| **Batch jobs**            | Submit work and follow it - status, output, and why it failed      | 6     |
 | **Datasets**              | Find and read the mainframe's files, libraries, and members        | 5     |
 | **Unix files**            | Browse and read the Unix side of z/OS (USS)                        | 3     |
 | **Day-to-day operations** | What broke, how often, and whether the system is healthy right now | 8     |
@@ -95,8 +81,7 @@ you intended _inside_ those permissions:
 Ask for a _"security posture summary"_ to see which of these are switched on.
 
 Before production, also: use a dedicated service account with least-privilege
-RACF profiles, keep secrets in a vault rather than plain environment variables,
-and put z/OSMF behind a gateway or VPN.
+RACF profiles, keep secrets in a vault rather than plain environment variables.
 
 ## Working on it
 
