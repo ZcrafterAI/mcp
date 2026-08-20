@@ -24,3 +24,102 @@ export async function mapConcurrent<T, R>(
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
     return results;
 }
+
+const retryableReadStatuses = new Set([429, 500, 502, 503, 504]);
+
+const nonRetryableReadTerms = [
+    'unauthorized',
+    'forbidden',
+    'validation',
+    'invalid',
+    'not found',
+    'not_found',
+    'authentication',
+    'permission denied',
+    'bad request',
+];
+
+const retryableReadTerms = [
+    'timeout',
+    'timed out',
+    'econnreset',
+    'connection reset',
+    'socket hang up',
+    'temporarily unavailable',
+    'service unavailable',
+    'bad gateway',
+    'gateway timeout',
+];
+
+export interface ReadRetryOptions {
+    delayMs?: number;
+    sleep?: (delayMs: number) => Promise<void>;
+}
+
+function errorText(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message.toLowerCase();
+    }
+
+    return String(error).toLowerCase();
+}
+
+function errorStatus(error: unknown): number | undefined {
+    if (typeof error === 'object' && error !== null) {
+        const candidate = error as {
+            status?: unknown;
+            statusCode?: unknown;
+            response?: { status?: unknown };
+        };
+
+        for (const status of [candidate.status, candidate.statusCode, candidate.response?.status]) {
+            if (typeof status === 'number') {
+                return status;
+            }
+        }
+    }
+
+    const match = errorText(error).match(/\b(?:http(?:\(s\))?\s*(?:status\s*)?)?(\d{3})\b/);
+    return match ? Number(match[1]) : undefined;
+}
+
+export function isRetryableReadError(error: unknown): boolean {
+    const text = errorText(error);
+
+    if (nonRetryableReadTerms.some((term) => text.includes(term))) {
+        return false;
+    }
+
+    const status = errorStatus(error);
+    if (status !== undefined) {
+        return retryableReadStatuses.has(status);
+    }
+
+    return retryableReadTerms.some((term) => text.includes(term));
+}
+
+function sleep(delayMs: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+/**
+ * Retry one safe read after a temporary upstream failure.
+ *
+ * Never use this helper for a write, delete, submit, or authentication
+ * operation: callers must pass only idempotent reads.
+ */
+export async function retryReadOnly<T>(
+    operation: () => Promise<T>,
+    options: ReadRetryOptions = {},
+): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        if (!isRetryableReadError(error)) {
+            throw error;
+        }
+
+        await (options.sleep ?? sleep)(options.delayMs ?? 125);
+        return operation();
+    }
+}

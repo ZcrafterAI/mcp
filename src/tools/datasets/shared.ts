@@ -6,6 +6,7 @@ import type { Dataset, Member } from '../../types/zos.js';
 import type { ToolContext } from '../../types/tools.js';
 import { Get, List } from '@zowe/zos-files-for-zowe-sdk';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
+import { retryReadOnly } from '../../utils/async.js';
 import { listItems } from '../../zowe/response.js';
 
 /**
@@ -86,7 +87,7 @@ export function assertValidMemberName(name: string): void {
 }
 /** List datasets matching a pattern (e.g. "SYS1.*"). */
 export async function listDatasets(ctx: ToolContext, pattern: string): Promise<Dataset[]> {
-    const response = await List.dataSet(ctx.session, pattern, { attributes: true });
+    const response = await retryReadOnly(() => List.dataSet(ctx.session, pattern, { attributes: true }));
     return listItems<RawDataset>(response)
         .map(normalizeDataset)
         .filter((ds) => ds.name.length > 0);

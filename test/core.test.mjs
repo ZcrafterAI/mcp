@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { configSchema } from '../dist/config/schema.js';
-import { mapConcurrent } from '../dist/utils/async.js';
+import { mapConcurrent, retryReadOnly } from '../dist/utils/async.js';
 import { createEndpointSession, createSession, resetSessions } from '../dist/zowe/session.js';
 import { assertValidJobId, normalizeJobId } from '../dist/tools/jobs/shared.js';
 import { assertValidMemberName, normalizeDatasetName } from '../dist/tools/datasets/shared.js';
@@ -67,4 +67,34 @@ test('bounded concurrency preserves order and never exceeds its limit', async ()
         values.map((value) => value * 2),
     );
     assert.equal(peak, 3);
+});
+
+
+test('retries a temporary read failure once', async () => {
+  let attempts = 0;
+  const result = await retryReadOnly(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      const error = new Error('temporary network failure');
+      error.code = 'ECONNRESET';
+      throw error;
+    }
+    return 'ok';
+  }, { retries: 1, baseDelayMs: 0 });
+
+  assert.equal(result, 'ok');
+  assert.equal(attempts, 2);
+});
+
+test('does not retry permanent read failures', async () => {
+  let attempts = 0;
+  await assert.rejects(
+    retryReadOnly(async () => {
+      attempts += 1;
+      const error = new Error('not found');
+      error.statusCode = 404;
+      throw error;
+    }, { retries: 1, baseDelayMs: 0 }),
+  );
+  assert.equal(attempts, 1);
 });
