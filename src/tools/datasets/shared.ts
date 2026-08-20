@@ -6,6 +6,7 @@ import type { Dataset, Member } from '../../types/zos.js';
 import type { ToolContext } from '../../types/tools.js';
 import { Get, List } from '@zowe/zos-files-for-zowe-sdk';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
+import { listItems } from '../../zowe/response.js';
 
 /**
  * Raw dataset entry as returned by the z/OSMF files API. Every field is
@@ -38,8 +39,8 @@ interface RawMember {
 export function normalizeDataset(raw: RawDataset): Dataset {
     const migrated = (raw.migr ?? '').toUpperCase() === 'YES' || raw.vol === 'MIGRAT';
     const dsorg = raw.dsorg;
-    const pdse = (raw.dsntype ?? '').toUpperCase() === 'LIBRARY' ||
-        (dsorg ?? '').toUpperCase() === 'PO-E';
+    const pdse =
+        (raw.dsntype ?? '').toUpperCase() === 'LIBRARY' || (dsorg ?? '').toUpperCase() === 'PO-E';
     return {
         name: raw.dsname ?? '',
         dsorg,
@@ -77,20 +78,25 @@ export function normalizeDatasetName(dsn: string): string {
 export function assertValidMemberName(name: string): void {
     const upper = name.toUpperCase();
     if (!/^[A-Z@#$][A-Z0-9@#$]{0,7}$/.test(upper)) {
-        throw new ValidationError(`Invalid PDS member name "${name}". Must be 1–8 characters starting with a letter or national character (@, #, $).`, { name });
+        throw new ValidationError(
+            `Invalid PDS member name "${name}". Must be 1–8 characters starting with a letter or national character (@, #, $).`,
+            { name },
+        );
     }
 }
 /** List datasets matching a pattern (e.g. "SYS1.*"). */
 export async function listDatasets(ctx: ToolContext, pattern: string): Promise<Dataset[]> {
     const response = await List.dataSet(ctx.session, pattern, { attributes: true });
-    const items: RawDataset[] = (response.apiResponse?.items ?? []);
-    return items.map(normalizeDataset).filter((ds) => ds.name.length > 0);
+    return listItems<RawDataset>(response)
+        .map(normalizeDataset)
+        .filter((ds) => ds.name.length > 0);
 }
 /** List members of a PDS (basic — name and dates only). */
 export async function listMembers(ctx: ToolContext, dsn: string): Promise<Member[]> {
     const response = await List.allMembers(ctx.session, dsn, {});
-    const items: RawMember[] = (response.apiResponse?.items ?? []);
-    return items.map(normalizeMember).filter((m) => m.name.length > 0);
+    return listItems<RawMember>(response)
+        .map(normalizeMember)
+        .filter((m) => m.name.length > 0);
 }
 /**
  * List members of a PDS with full stats (user, size, changed time).
@@ -98,15 +104,19 @@ export async function listMembers(ctx: ToolContext, dsn: string): Promise<Member
  */
 export async function listMembersWithStats(ctx: ToolContext, dsn: string): Promise<Member[]> {
     const response = await List.allMembers(ctx.session, dsn, { attributes: true });
-    const items: RawMember[] = (response.apiResponse?.items ?? []);
-    return items.map(normalizeMember).filter((m) => m.name.length > 0);
+    return listItems<RawMember>(response)
+        .map(normalizeMember)
+        .filter((m) => m.name.length > 0);
 }
 /** Read a sequential dataset or PDS member as text. */
-export async function readDataset(ctx: ToolContext, dsn: string, member?: string, encoding?: 'utf8' | 'ibm1047'): Promise<string> {
+export async function readDataset(
+    ctx: ToolContext,
+    dsn: string,
+    member?: string,
+    encoding?: 'utf8' | 'ibm1047',
+): Promise<string> {
     const target = member ? `${dsn}(${member})` : dsn;
-    const options = encoding === 'ibm1047'
-        ? { responseTimeout: 60000 }
-        : {};
+    const options = encoding === 'ibm1047' ? { responseTimeout: 60000 } : {};
     const buffer = await Get.dataSet(ctx.session, target, options);
     if (buffer == null) {
         throw new NotFoundError(`Dataset ${target} could not be read or is empty.`, { target });

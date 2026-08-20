@@ -1,13 +1,12 @@
 /**
  * `submit_jcl` — submit inline JCL for execution.
  */
-import type { ToolRegistrar } from '../../types/tools.js';
 import { z } from 'zod';
+import { defineTool } from '../define-tool.js';
 import { SubmitJobs, GetJobs } from '@zowe/zos-jobs-for-zowe-sdk';
 import { ValidationError } from '../../utils/errors.js';
 import { formatJobStatus, textResult } from '../../utils/formatters.js';
-import { assertJclSizeAllowed } from '../../utils/security.js';
-import { securedHandler } from '../../utils/tool-handler.js';
+import { assertJclSizeAllowed } from '../../policy/rules.js';
 import { normalizeJob } from './shared.js';
 const inputShape = {
     jcl: z
@@ -23,7 +22,9 @@ const inputShape = {
         .int()
         .positive()
         .optional()
-        .describe('Maximum time to wait in seconds (defaults to 30, max 300). Only used when wait=true.'),
+        .describe(
+            'Maximum time to wait in seconds (defaults to 30, max 300). Only used when wait=true.',
+        ),
     jobClass: z
         .string()
         .length(1)
@@ -33,7 +34,10 @@ const inputShape = {
     notify: z
         .string()
         .max(8)
-        .regex(/^[A-Z0-9@#$]{1,8}$/i, 'Notify user id must be 1–8 alphanumeric/national characters.')
+        .regex(
+            /^[A-Z0-9@#$]{1,8}$/i,
+            'Notify user id must be 1–8 alphanumeric/national characters.',
+        )
         .optional()
         .describe('Override the NOTIFY= parameter on the JOB card (TSO user id, max 8 chars).'),
 };
@@ -51,8 +55,13 @@ function rewriteJobCardParam(jcl: string, param: string, value: string) {
         note: `[Note: ${param}= parameter not found on JOB card; original JCL submitted unchanged for ${param}.]`,
     };
 }
-export const registerSubmitJclTool: ToolRegistrar = (server, ctx) => {
-    server.tool('submit_jcl', 'Submit inline JCL to JES for execution. Supports optional wait-for-completion polling, and JOB card CLASS/NOTIFY overrides.', inputShape, securedHandler(ctx, 'submit_jcl', async ({ jcl, wait, timeout, jobClass, notify }) => {
+
+export const submitJclTool = defineTool({
+    name: 'submit_jcl',
+    description:
+        'Submit inline JCL to JES for execution. Supports optional wait-for-completion polling, and JOB card CLASS/NOTIFY overrides.',
+    input: inputShape,
+    async run({ jcl, wait, timeout, jobClass, notify }, ctx) {
         let normalized = jcl.replace(/\r\n/g, '\n').trim();
         if (!/^\/\//.test(normalized)) {
             throw new ValidationError('JCL must begin with a "//" JOB statement.');
@@ -62,24 +71,33 @@ export const registerSubmitJclTool: ToolRegistrar = (server, ctx) => {
         }
         // Ensure at least one EXEC step follows the JOB card
         const linesAfterJob = normalized.split('\n').slice(1);
-        const hasExec = linesAfterJob.some((line) => /^\/\/\S*\s+EXEC\s/i.test(line) && !/^\/\/\*/.test(line));
+        const hasExec = linesAfterJob.some(
+            (line) => /^\/\/\S*\s+EXEC\s/i.test(line) && !/^\/\/\*/.test(line),
+        );
         if (!hasExec) {
-            throw new ValidationError('JCL must contain at least one EXEC statement after the JOB card.');
+            throw new ValidationError(
+                'JCL must contain at least one EXEC statement after the JOB card.',
+            );
         }
         assertJclSizeAllowed(ctx.config, normalized);
-        // Apply JOB card overrides
         const overrideNotes = [];
         if (jobClass) {
-            const { jcl: patched, note } = rewriteJobCardParam(normalized, 'CLASS', jobClass.toUpperCase());
+            const { jcl: patched, note } = rewriteJobCardParam(
+                normalized,
+                'CLASS',
+                jobClass.toUpperCase(),
+            );
             normalized = patched;
-            if (note)
-                overrideNotes.push(note);
+            if (note) overrideNotes.push(note);
         }
         if (notify) {
-            const { jcl: patched, note } = rewriteJobCardParam(normalized, 'NOTIFY', notify.toUpperCase());
+            const { jcl: patched, note } = rewriteJobCardParam(
+                normalized,
+                'NOTIFY',
+                notify.toUpperCase(),
+            );
             normalized = patched;
-            if (note)
-                overrideNotes.push(note);
+            if (note) overrideNotes.push(note);
         }
         const submitted = await SubmitJobs.submitJcl(ctx.session, normalized);
         let job = normalizeJob(submitted);
@@ -88,7 +106,7 @@ export const registerSubmitJclTool: ToolRegistrar = (server, ctx) => {
         if (wait) {
             const timeoutSeconds = Math.min(timeout ?? 30, 300);
             const start = Date.now();
-            while (job.status !== 'OUTPUT' && (Date.now() - start) < timeoutSeconds * 1000) {
+            while (job.status !== 'OUTPUT' && Date.now() - start < timeoutSeconds * 1000) {
                 await new Promise((resolve) => setTimeout(resolve, 2000));
                 const rawJob = await GetJobs.getJob(ctx.session, job.jobId);
                 if (rawJob) {
@@ -97,12 +115,15 @@ export const registerSubmitJclTool: ToolRegistrar = (server, ctx) => {
             }
             const waitNote = `[Wait mode: polling every 2s, timeout ${timeoutSeconds}s]`;
             if (job.status === 'OUTPUT') {
-                return textResult(`Submitted successfully and completed execution.\n${waitNote}\n\n${formatJobStatus(job)}${overrideSuffix}`);
-            }
-            else {
-                return textResult(`Submitted successfully but execution did not finish within ${timeoutSeconds} seconds.\n${waitNote}\n\n${formatJobStatus(job)}${overrideSuffix}`);
+                return textResult(
+                    `Submitted successfully and completed execution.\n${waitNote}\n\n${formatJobStatus(job)}${overrideSuffix}`,
+                );
+            } else {
+                return textResult(
+                    `Submitted successfully but execution did not finish within ${timeoutSeconds} seconds.\n${waitNote}\n\n${formatJobStatus(job)}${overrideSuffix}`,
+                );
             }
         }
         return textResult(`Submitted successfully.\n\n${formatJobStatus(job)}${overrideSuffix}`);
-    }));
-};
+    },
+});

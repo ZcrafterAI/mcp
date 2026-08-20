@@ -1,13 +1,15 @@
 /**
- * CICS tools registration.
+ * CICS regions.
+ *
+ * Look at CICS — the transaction system that runs interactive workloads.
  */
-import type { ToolRegistrar } from '../../types/tools.js';
-import { registerListCicsRegionsTool } from './list-regions.js';
-import { registerGetCicsRegionTool } from './region-status.js';
-import { registerListCicsTransactionsTool } from './list-transactions.js';
-export const registerCicsTools: ToolRegistrar = (server, ctx) => {
-    registerListCicsRegionsTool(server, ctx);
-    registerGetCicsRegionTool(server, ctx);
-    registerListCicsTransactionsTool(server, ctx);
-    ctx.logger.debug('Registered CICS tools');
-};
+import type { Tool } from '../define-tool.js';
+import { listCicsRegionsTool } from './list-regions.js';
+import { getCicsRegionStatusTool } from './region-status.js';
+import { listCicsTransactionsTool } from './list-transactions.js';
+
+export const cicsTools: Tool[] = [
+    listCicsRegionsTool,
+    getCicsRegionStatusTool,
+    listCicsTransactionsTool,
+];

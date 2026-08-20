@@ -11,11 +11,16 @@
  *     the configured spool-file limit, so agents get a richer picture
  *   - Surfaces the abend code reference title inline when available
  */
-import type { ToolRegistrar } from '../../types/tools.js';
 import { z } from 'zod';
-import { securedHandler } from '../../utils/tool-handler.js';
-import { formatAnalysisFull, formatSpoolFiles, formatStructuredResponse, textResult, truncateLines, } from '../../utils/formatters.js';
-import { lookupAbend } from '../../utils/abend-codes.js';
+import { defineTool } from '../define-tool.js';
+import {
+    formatAnalysisFull,
+    formatSpoolFiles,
+    formatStructuredResponse,
+    textResult,
+    truncateLines,
+} from '../../utils/formatters.js';
+import { lookupAbend } from '../../parsers/abend-codes.js';
 import { analyzeJobFailure, fetchDiagnosticSpool, fetchSpoolFiles } from '../jobs/shared.js';
 const inputShape = {
     jobId: z.string().min(1).describe('JES job id to investigate, e.g. "JOB01234".'),
@@ -25,10 +30,17 @@ const inputShape = {
         .positive()
         .max(500)
         .optional()
-        .describe('Maximum lines to include from each diagnostic spool excerpt. Defaults to 80. Increase for a deeper view.'),
+        .describe(
+            'Maximum lines to include from each diagnostic spool excerpt. Defaults to 80. Increase for a deeper view.',
+        ),
 };
-export const registerInvestigateTool: ToolRegistrar = (server, ctx) => {
-    server.tool('investigate_incident', 'Assemble a full incident bundle for a job: status, root-cause analysis (with abend reference), complete spool inventory, and diagnostic excerpts from all relevant DDs.', inputShape, securedHandler(ctx, 'investigate_incident', async ({ jobId, maxExcerptLines }) => {
+
+export const investigateIncidentTool = defineTool({
+    name: 'investigate_incident',
+    description:
+        'Assemble a full incident bundle for a job: status, root-cause analysis (with abend reference), complete spool inventory, and diagnostic excerpts from all relevant DDs.',
+    input: inputShape,
+    async run({ jobId, maxExcerptLines }, ctx) {
         const excerptLines = maxExcerptLines ?? 80;
         const analysis = await analyzeJobFailure(ctx, jobId);
         const job = analysis.job;
@@ -40,8 +52,8 @@ export const registerInvestigateTool: ToolRegistrar = (server, ctx) => {
         const abendReference = abendInfo
             ? `${abendInfo.code} — ${abendInfo.title}\n${abendInfo.suggestedFix}`
             : analysis.abendCode
-                ? `Abend code ${analysis.abendCode} has no reference entry in the local catalog.`
-                : 'No abend code detected.';
+              ? `Abend code ${analysis.abendCode} has no reference entry in the local catalog.`
+              : 'No abend code detected.';
         const sections = [
             { heading: 'Failure analysis', body: analysisFull },
             {
@@ -67,7 +79,15 @@ export const registerInvestigateTool: ToolRegistrar = (server, ctx) => {
                 });
             }
         }
-        ctx.logger.debug({ jobId, abendCode: analysis.abendCode, excerptSections: sections.length }, 'investigate_incident');
-        return textResult(formatStructuredResponse(`Incident Investigation — ${job.jobName} (${job.jobId})`, sections));
-    }));
-};
+        ctx.logger.debug(
+            { jobId, abendCode: analysis.abendCode, excerptSections: sections.length },
+            'investigate_incident',
+        );
+        return textResult(
+            formatStructuredResponse(
+                `Incident Investigation — ${job.jobName} (${job.jobId})`,
+                sections,
+            ),
+        );
+    },
+});

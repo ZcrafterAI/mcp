@@ -17,20 +17,21 @@ export interface CreateLoggerOptions {
 let rootLogger: Logger | undefined;
 /** Create (once) and return the process-wide root logger. */
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
-    if (rootLogger)
-        return rootLogger;
+    if (rootLogger) return rootLogger;
     const { level = 'info', name = 'mainframe-mcp-server' } = options;
-    rootLogger = pino({
-        name,
-        level,
-        base: { pid: process.pid },
-        timestamp: pino.stdTimeFunctions.isoTime,
-        formatters: {
-            level: (label: string) => ({ level: label }),
+    rootLogger = pino(
+        {
+            name,
+            level,
+            base: { pid: process.pid },
+            timestamp: pino.stdTimeFunctions.isoTime,
+            formatters: {
+                level: (label: string) => ({ level: label }),
+            },
         },
-    }, 
-    // Write to stderr so stdout stays clean for the MCP stdio transport.
-    pino.destination(2));
+        // Write to stderr so stdout stays clean for the MCP stdio transport.
+        pino.destination(2),
+    );
     return rootLogger;
 }
 /** Get the already-initialized root logger, creating a default one if needed. */

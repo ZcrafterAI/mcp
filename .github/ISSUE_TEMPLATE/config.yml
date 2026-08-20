@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ZcrafterAI/mcp/blob/master/SECURITY.md
+    about: Please report privately using the process in SECURITY.md, not a public issue.

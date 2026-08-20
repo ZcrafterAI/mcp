@@ -1,7 +1,15 @@
 {
   "name": "@zcrafterai/mcp",
   "version": "2.5.0",
-  "description": "MCP server for IBM z/OS jobs, datasets, USS, and operational diagnostics via the Zowe SDK.",
+  "description": "MCP server that lets AI agents work with IBM z/OS: batch jobs, datasets, Unix files, CICS, Db2, and operational diagnostics.",
+  "homepage": "https://github.com/ZcrafterAI/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZcrafterAI/mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZcrafterAI/mcp/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,7 +17,7 @@
     "zcrafter-mcp": "dist/index.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0"
   },
   "files": [
     "dist",
@@ -20,14 +28,19 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsc --watch",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/core.test.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build && node --test",
+    "docs:tools": "npm run build && node scripts/generate-tool-docs.mjs",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "benchmark": "npm run build && node scripts/benchmark.mjs",
-    "benchmark:live": "npm run build && node scripts/compare-live.mjs",
-    "check": "npm run typecheck && npm test",
-    "clean": "rm -rf dist"
+    "benchmark:live": "npm run build && node scripts/compare-live.mjs"
   },
   "keywords": [
     "mcp",
@@ -51,7 +64,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.14.0",
-    "typescript": "^5.5.0"
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.67.0"
   }
 }

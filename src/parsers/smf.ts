@@ -1,4 +1,3 @@
-
 /**
  * SMF / RMF metric normalizers.
  */
@@ -17,24 +16,18 @@ export interface SmfMetric {
 function inferCategory(name: string): string | undefined {
     const lower = name.toLowerCase();
     // Order matters: check memory patterns before util to avoid cpu match on memUtil
-    if (/mem|real|virtual|page|swap|storage/.test(lower))
-        return 'memory';
-    if (/cpu|busy|util|dispatch|mips/.test(lower))
-        return 'cpu';
-    if (/io|read|write|excp|channel/.test(lower))
-        return 'io';
-    if (/rate|resp|time|sec|ms|latency/.test(lower))
-        return 'performance';
-    if (/count|num|total|fail|error|abend/.test(lower))
-        return 'counter';
+    if (/mem|real|virtual|page|swap|storage/.test(lower)) return 'memory';
+    if (/cpu|busy|util|dispatch|mips/.test(lower)) return 'cpu';
+    if (/io|read|write|excp|channel/.test(lower)) return 'io';
+    if (/rate|resp|time|sec|ms|latency/.test(lower)) return 'performance';
+    if (/count|num|total|fail|error|abend/.test(lower)) return 'counter';
     return undefined;
 }
 /** Extract key/value metrics from z/OSMF RMF JSON (shape varies by endpoint). */
 export function parseRmfJson(payload: unknown): SmfMetric[] {
     const metrics: SmfMetric[] = [];
     function walk(node: unknown, prefix = '') {
-        if (node == null || typeof node !== 'object')
-            return;
+        if (node == null || typeof node !== 'object') return;
         if (Array.isArray(node)) {
             node.forEach((item, index) => walk(item, `${prefix}[${index}]`));
             return;
@@ -42,11 +35,18 @@ export function parseRmfJson(payload: unknown): SmfMetric[] {
         for (const [key, value] of Object.entries(node)) {
             const path = prefix ? `${prefix}.${key}` : key;
             if (typeof value === 'number' || typeof value === 'string') {
-                if (/cpu|mvs|busy|util|rate|count|time|sec|ms|pct|percent|io|mem|page|excp/i.test(key)) {
-                    metrics.push({ name: path, value: String(value), category: inferCategory(key) });
+                if (
+                    /cpu|mvs|busy|util|rate|count|time|sec|ms|pct|percent|io|mem|page|excp/i.test(
+                        key,
+                    )
+                ) {
+                    metrics.push({
+                        name: path,
+                        value: String(value),
+                        category: inferCategory(key),
+                    });
                 }
-            }
-            else {
+            } else {
                 walk(value, path);
             }
         }
@@ -62,11 +62,11 @@ export function parseSmfSummaryText(text: string): SmfMetric[] {
         .filter(Boolean)
         .slice(0, 100)
         .map((line) => {
-        const kv = line.match(/^([^:=\s]+)\s*[:=]\s*(.+)$/);
-        if (kv) {
-            const name = kv[1].trim();
-            return { name, value: kv[2].trim(), category: inferCategory(name) };
-        }
-        return { name: 'record', value: line };
-    });
+            const kv = line.match(/^([^:=\s]+)\s*[:=]\s*(.+)$/);
+            if (kv) {
+                const name = kv[1].trim();
+                return { name, value: kv[2].trim(), category: inferCategory(name) };
+            }
+            return { name: 'record', value: line };
+        });
 }

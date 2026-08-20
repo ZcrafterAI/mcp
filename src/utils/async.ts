@@ -7,8 +7,7 @@ export async function mapConcurrent<T, R>(
     concurrency: number,
     mapper: (value: T, index: number) => Promise<R>,
 ): Promise<R[]> {
-    if (values.length === 0)
-        return [];
+    if (values.length === 0) return [];
 
     const workerCount = Math.min(Math.max(1, Math.floor(concurrency)), values.length);
     const results = new Array<R>(values.length);

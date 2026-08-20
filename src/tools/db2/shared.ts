@@ -3,7 +3,10 @@
  */
 import type { Db2CatalogEntry } from '../../types/zos.js';
 import type { ToolContext } from '../../types/tools.js';
-import { createEndpointSession, postJson, requireDb2Config, } from '../../zowe/rest-client.js';
+import { createEndpointSession } from '../../zowe/session.js';
+import { postJson } from '../../zowe/rest-client.js';
+import { requireDb2Config } from '../../zowe/requirements.js';
+import { asText } from '../../zowe/response.js';
 
 /** Db2 REST `/v4/sql` response envelope. */
 interface Db2SqlResponse {
@@ -34,7 +37,10 @@ export function sanitizeSqlLiteral(value: string): string {
         .slice(0, 64);
 }
 /** Execute a read-only SQL statement via Db2 REST. */
-export async function executeDb2Sql(ctx: ToolContext, sql: string): Promise<Record<string, unknown>[]> {
+export async function executeDb2Sql(
+    ctx: ToolContext,
+    sql: string,
+): Promise<Record<string, unknown>[]> {
     const { location } = requireDb2Config(ctx.config);
     const session = createEndpointSession(ctx.config, 'db2');
     const response = await postJson<Db2SqlResponse>(session, `/v4/sql/${location}`, { sql });
@@ -49,12 +55,9 @@ export async function listDb2Subsystems(ctx: ToolContext): Promise<string[]> {
     const session = createEndpointSession(ctx.config, 'db2');
     try {
         const response = await postJson<Db2LocationsResponse>(session, '/v4/locations', {});
-        if (response.locations)
-            return response.locations;
-        if (response.rows)
-            return response.rows.map((row) => String(row.location));
-    }
-    catch {
+        if (response.locations) return response.locations;
+        if (response.rows) return response.rows.map((row) => String(row.location));
+    } catch {
         // Fall back to configured location only.
     }
     return [location];
@@ -70,18 +73,23 @@ const TYPE_NAMES: Record<string, string> = {
     X: 'AUXILIARY TABLE',
 };
 /** Search the Db2 catalog for tables, views, or aliases. */
-export async function searchDb2Catalog(ctx: ToolContext, pattern: string, schema?: string, type?: string, maxResults: number = 50): Promise<Db2CatalogEntry[]> {
+export async function searchDb2Catalog(
+    ctx: ToolContext,
+    pattern: string,
+    schema?: string,
+    type?: string,
+    maxResults: number = 50,
+): Promise<Db2CatalogEntry[]> {
     const likePattern = sanitizeSqlLiteral(pattern).replace(/\*/g, '%').replace(/\?/g, '_');
     const schemaFilter = schema ? `AND CREATOR = '${sanitizeSqlLiteral(schema)}'` : '';
-    // Validate and build type filter
     let typeFilter = '';
     if (type) {
         const upper = type.trim().toUpperCase();
         // Accept full words like "TABLE" or short codes like "T"
-        const code = Object.entries(TYPE_NAMES).find(([, name]) => name === upper)?.[0] ??
+        const code =
+            Object.entries(TYPE_NAMES).find(([, name]) => name === upper)?.[0] ??
             (VALID_CATALOG_TYPES.includes(upper) ? upper : null);
-        if (code)
-            typeFilter = `AND TYPE = '${code}'`;
+        if (code) typeFilter = `AND TYPE = '${code}'`;
     }
     const limit = Math.min(maxResults, 200);
     const sql = `
@@ -94,12 +102,18 @@ export async function searchDb2Catalog(ctx: ToolContext, pattern: string, schema
     FETCH FIRST ${limit} ROWS ONLY
   `.trim();
     const rows = await executeDb2Sql(ctx, sql);
-    return rows.map((row) => ({
-        schema: String(row.CREATOR ?? row.creator ?? '—'),
-        name: String(row.NAME ?? row.name ?? '—'),
-        type: TYPE_NAMES[String(row.TYPE ?? row.type ?? '')] ?? String(row.TYPE ?? row.type ?? '—'),
-        rowCount: row.ROWCOUNT != null ? String(row.ROWCOUNT) : undefined,
-        created: row.CREATED != null ? String(row.CREATED) : undefined,
-        remarks: row.REMARKS != null ? String(row.REMARKS).trim() || undefined : undefined,
-    }));
+    return rows.map((row) => {
+        // Db2 REST answers with either upper- or lower-case column names.
+        const column = (name: string): unknown =>
+            row[name.toUpperCase()] ?? row[name.toLowerCase()];
+        const remarks = column('remarks');
+        return {
+            schema: asText(column('creator')),
+            name: asText(column('name')),
+            type: TYPE_NAMES[asText(column('type'), '')] ?? asText(column('type')),
+            rowCount: column('rowcount') != null ? asText(column('rowcount')) : undefined,
+            created: column('created') != null ? asText(column('created')) : undefined,
+            remarks: remarks != null ? asText(remarks).trim() || undefined : undefined,
+        };
+    });
 }

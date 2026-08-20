@@ -1,18 +1,20 @@
 /**
- * Dataset tools registration.
+ * Datasets.
+ *
+ * Find and read the mainframe equivalent of files and folders: sequential
+ * datasets, partitioned datasets (PDS), and their members.
  */
-import type { ToolRegistrar } from '../../types/tools.js';
-import { registerListDatasetsTool } from './list-datasets.js';
-import { registerReadDatasetTool } from './read-dataset.js';
-import { registerSearchDatasetTool } from './search-dataset.js';
-import { registerSearchMembersTool } from './search-members.js';
-import { registerDatasetInfoTool } from './dataset-info.js';
-export const registerDatasetTools: ToolRegistrar = (server, ctx) => {
-    registerListDatasetsTool(server, ctx);
-    registerReadDatasetTool(server, ctx);
-    registerSearchDatasetTool(server, ctx);
-    registerSearchMembersTool(server, ctx);
-    registerDatasetInfoTool(server, ctx);
-    ctx.logger.debug('Registered dataset tools');
-};
-export * from './shared.js';
+import type { Tool } from '../define-tool.js';
+import { listDatasetsTool } from './list-datasets.js';
+import { readDatasetTool } from './read-dataset.js';
+import { searchDatasetTool } from './search-dataset.js';
+import { searchMembersTool } from './search-members.js';
+import { getDatasetInfoTool } from './dataset-info.js';
+
+export const datasetTools: Tool[] = [
+    listDatasetsTool,
+    readDatasetTool,
+    searchDatasetTool,
+    searchMembersTool,
+    getDatasetInfoTool,
+];

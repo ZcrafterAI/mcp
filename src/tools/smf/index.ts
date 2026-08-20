@@ -1,9 +1,9 @@
 /**
- * SMF tools registration.
+ * Performance metrics.
+ *
+ * Read the system's own performance records (SMF/RMF).
  */
-import type { ToolRegistrar } from '../../types/tools.js';
-import { registerSmfMetricsTool } from './get-metrics.js';
-export const registerSmfTools: ToolRegistrar = (server, ctx) => {
-    registerSmfMetricsTool(server, ctx);
-    ctx.logger.debug('Registered SMF tools');
-};
+import type { Tool } from '../define-tool.js';
+import { getSmfMetricsTool } from './get-metrics.js';
+
+export const smfTools: Tool[] = [getSmfMetricsTool];

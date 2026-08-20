@@ -4,12 +4,22 @@
  * With no `ddName`, returns the spool-file inventory (optionally filtered by step).
  * With a `ddName`, returns that DD's content (line-capped; optionally grep-filtered).
  */
-import type { ToolRegistrar } from '../../types/tools.js';
 import { z } from 'zod';
+import { defineTool } from '../define-tool.js';
 import { NotFoundError } from '../../utils/errors.js';
-import { formatContentHeader, formatSpoolFiles, textResult, truncateLines, } from '../../utils/formatters.js';
-import { securedHandler } from '../../utils/tool-handler.js';
-import { assertValidJobId, fetchJob, fetchSpoolContent, fetchSpoolFiles, normalizeJobId } from './shared.js';
+import {
+    formatContentHeader,
+    formatSpoolFiles,
+    textResult,
+    truncateLines,
+} from '../../utils/formatters.js';
+import {
+    assertValidJobId,
+    fetchJob,
+    fetchSpoolContent,
+    fetchSpoolFiles,
+    normalizeJobId,
+} from './shared.js';
 const inputShape = {
     jobId: z.string().min(1).describe('JES job id, e.g. "JOB01234".'),
     ddName: z
@@ -19,11 +29,15 @@ const inputShape = {
     stepName: z
         .string()
         .optional()
-        .describe('Filter spool inventory to files produced by this step name. Only used when ddName is omitted.'),
+        .describe(
+            'Filter spool inventory to files produced by this step name. Only used when ddName is omitted.',
+        ),
     searchText: z
         .string()
         .optional()
-        .describe('When reading a DD, return only lines containing this text (case-insensitive grep). Applied before line capping.'),
+        .describe(
+            'When reading a DD, return only lines containing this text (case-insensitive grep). Applied before line capping.',
+        ),
     maxLines: z
         .number()
         .int()
@@ -31,8 +45,13 @@ const inputShape = {
         .optional()
         .describe('Maximum output lines returned (caps at server configuration maximum).'),
 };
-export const registerGetJobOutputTool: ToolRegistrar = (server, ctx) => {
-    server.tool('get_job_output', 'Retrieve spool output for a job. Lists spool files (with optional step filter), or returns one DD content (with optional text grep and line cap).', inputShape, securedHandler(ctx, 'get_job_output', async ({ jobId, ddName, stepName, searchText, maxLines }) => {
+
+export const getJobOutputTool = defineTool({
+    name: 'get_job_output',
+    description:
+        'Retrieve spool output for a job. Lists spool files (with optional step filter), or returns one DD content (with optional text grep and line cap).',
+    input: inputShape,
+    async run({ jobId, ddName, stepName, searchText, maxLines }, ctx) {
         assertValidJobId(jobId);
         const normalizedId = normalizeJobId(jobId);
         const job = await fetchJob(ctx, normalizedId);
@@ -43,7 +62,9 @@ export const registerGetJobOutputTool: ToolRegistrar = (server, ctx) => {
                 const upper = stepName.toUpperCase();
                 files = files.filter((f) => (f.stepName ?? '').toUpperCase() === upper);
                 if (files.length === 0) {
-                    return textResult(`No spool files found for step "${stepName}" in ${job.jobName} (${job.jobId}).`);
+                    return textResult(
+                        `No spool files found for step "${stepName}" in ${job.jobName} (${job.jobId}).`,
+                    );
                 }
             }
             return textResult(formatSpoolFiles(job.jobName, job.jobId, files));
@@ -67,10 +88,21 @@ export const registerGetJobOutputTool: ToolRegistrar = (server, ctx) => {
             raw = matched.join('\n');
             grepNote = `\n[grep: "${searchText}" — ${matched.length} of ${allLines.length} lines matched]`;
         }
-        const cap = Math.min(maxLines ?? ctx.config.limits.maxJobOutputLines, ctx.config.limits.maxJobOutputLines);
+        const cap = Math.min(
+            maxLines ?? ctx.config.limits.maxJobOutputLines,
+            ctx.config.limits.maxJobOutputLines,
+        );
         const { text, truncated, totalLines } = truncateLines(raw, cap);
-        ctx.logger.debug({ jobId: normalizedId, ddName: normalizedDd, totalLines, truncated, searchText }, 'get_job_output');
-        const header = formatContentHeader(`Output of ${job.jobName} (${job.jobId}) DD=${match.ddName}`, truncated, totalLines, cap);
+        ctx.logger.debug(
+            { jobId: normalizedId, ddName: normalizedDd, totalLines, truncated, searchText },
+            'get_job_output',
+        );
+        const header = formatContentHeader(
+            `Output of ${job.jobName} (${job.jobId}) DD=${match.ddName}`,
+            truncated,
+            totalLines,
+            cap,
+        );
         return textResult(header + grepNote + (grepNote ? '\n' : '') + text);
-    }));
-};
+    },
+});

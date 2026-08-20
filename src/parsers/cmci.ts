@@ -1,4 +1,3 @@
-
 /**
  * Minimal CMCI XML response parser.
  *
@@ -25,8 +24,7 @@ export function parseCmciXml(xml: string): CmciRecord[] {
         for (const match of cols) {
             record[match[1].toLowerCase()] = decodeXmlEntities(match[2].trim());
         }
-        if (Object.keys(record).length > 0)
-            rows.push(record);
+        if (Object.keys(record).length > 0) rows.push(record);
     }
     return rows;
 }

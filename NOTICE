@@ -1,16 +1,5 @@
 This product includes software developed by H A R S H H A A.
 
-The TypeScript sources in `src/` are a reconstruction of
-`@notharshhaa/mainframe-mcp-server` version 2.5.0, published to npm under the
-MIT License (Copyright (c) 2026 H A R S H H A A). The full license text is in
-LICENSE and applies to this code.
-
-The upstream repository, https://github.com/NotHarshhaa/mainframe-mcp-server,
-was removed from GitHub and returns HTTP 404. The npm package remains published.
-Because no release ever shipped a `src/` directory, and the published source
-maps contain mappings but no `sourcesContent`, the original TypeScript was not
-recoverable directly. These sources were reconstructed by merging the compiled
-`dist/*.js` with the `dist/*.d.ts` type declarations that shipped alongside it.
-
-See RECONSTRUCTION.md for the method, verification, and the specific points
-where this code intentionally differs from upstream.
+Portions of this code originate in `@notharshhaa/mainframe-mcp-server`,
+published under the MIT License (Copyright (c) 2026 H A R S H H A A). The full
+license text is in LICENSE and applies to this code.

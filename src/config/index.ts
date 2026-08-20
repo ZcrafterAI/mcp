@@ -80,8 +80,7 @@ See docs/configuration.md for the full variable reference.
  * @param reload - Force a fresh read (primarily useful in tests).
  */
 export function loadConfig(reload: boolean = false): AppConfig {
-    if (cached && !reload)
-        return cached;
+    if (cached && !reload) return cached;
     const parsed = configSchema.safeParse(readEnv());
     if (!parsed.success) {
         const details = parsed.error.issues

@@ -5,7 +5,8 @@ import type { UssEntry } from '../../types/zos.js';
 import type { ToolContext } from '../../types/tools.js';
 import { Get, List } from '@zowe/zos-files-for-zowe-sdk';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
-import { assertUssPathAllowed } from '../../utils/security.js';
+import { listItems } from '../../zowe/response.js';
+import { assertUssPathAllowed } from '../../policy/rules.js';
 
 /** Raw USS directory entry as returned by the z/OSMF files API. */
 interface RawUssItem {
@@ -69,15 +70,24 @@ export function validateAbsolutePath(path: string): void {
         throw new ValidationError('USS path must not be empty.', { path });
     }
     if (!normalized.startsWith('/')) {
-        throw new ValidationError(`USS path "${path}" is not absolute. All USS paths must start with "/".`, { path });
+        throw new ValidationError(
+            `USS path "${path}" is not absolute. All USS paths must start with "/".`,
+            { path },
+        );
     }
     // Prevent path traversal
     if (normalized.includes('/../') || normalized.endsWith('/..')) {
-        throw new ValidationError(`USS path "${path}" contains directory traversal sequences ("..").`, { path });
+        throw new ValidationError(
+            `USS path "${path}" contains directory traversal sequences ("..").`,
+            { path },
+        );
     }
 }
 /** Sort USS entries by the given key. Returns a new sorted array. */
-export function sortUssEntries(entries: UssEntry[], sortBy: 'name' | 'size' | 'modified' | 'type'): UssEntry[] {
+export function sortUssEntries(
+    entries: UssEntry[],
+    sortBy: 'name' | 'size' | 'modified' | 'type',
+): UssEntry[] {
     return entries.slice().sort((a, b) => {
         if (sortBy === 'size') {
             // Largest first; entries without a size go to bottom
@@ -101,8 +111,7 @@ export async function listUssDirectory(ctx: ToolContext, path: string): Promise<
     validateAbsolutePath(path);
     assertUssPathAllowed(ctx.config, path);
     const response = await List.fileList(ctx.session, path, {});
-    const items: RawUssItem[] = (response.apiResponse?.items ?? []);
-    return items
+    return listItems<RawUssItem>(response)
         .map(normalizeUssEntry)
         .filter((entry) => entry.name && entry.name !== '.' && entry.name !== '..');
 }

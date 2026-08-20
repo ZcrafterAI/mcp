@@ -1,16 +1,12 @@
 /**
  * `query_racf_audit` — search RACF audit records from a configured log source.
  */
-import type { ToolRegistrar } from '../../types/tools.js';
 import { z } from 'zod';
-import { securedHandler } from '../../utils/tool-handler.js';
+import { defineTool } from '../define-tool.js';
 import { formatStructuredResponse, renderTable, textResult } from '../../utils/formatters.js';
 import { queryRacfAudit } from './shared.js';
 const inputShape = {
-    user: z
-        .string()
-        .optional()
-        .describe('Filter by user id (substring match, case-insensitive).'),
+    user: z.string().optional().describe('Filter by user id (substring match, case-insensitive).'),
     resource: z
         .string()
         .optional()
@@ -40,10 +36,19 @@ const inputShape = {
         .optional()
         .describe('Maximum number of audit records to return (default 100, capped server-side).'),
 };
-export const registerQueryRacfAuditTool: ToolRegistrar = (server, ctx) => {
-    server.tool('query_racf_audit', 'Query RACF security audit records from a configured USS path or dataset. Supports user, resource, event, result, class, and time-window filters.', inputShape, securedHandler(ctx, 'query_racf_audit', async ({ user, resource, event, result, class: cls, hours, maxResults }) => {
+
+export const queryRacfAuditTool = defineTool({
+    name: 'query_racf_audit',
+    description:
+        'Query RACF security audit records from a configured USS path or dataset. Supports user, resource, event, result, class, and time-window filters.',
+    input: inputShape,
+    async run({ user, resource, event, result, class: cls, hours, maxResults }, ctx) {
         const limit = maxResults ?? 100;
-        const entries = await queryRacfAudit(ctx, { user, resource, hours, event, result, class: cls }, limit);
+        const entries = await queryRacfAudit(
+            ctx,
+            { user, resource, hours, event, result, class: cls },
+            limit,
+        );
         if (entries.length === 0) {
             return textResult('No RACF audit records matched the given filters.');
         }
@@ -64,12 +69,20 @@ export const registerQueryRacfAuditTool: ToolRegistrar = (server, ctx) => {
             hours ? `hours=${hours}` : null,
         ].filter((part): part is string => Boolean(part));
         const filterLine = filterParts.length > 0 ? ` [${filterParts.join(', ')}]` : '';
-        ctx.logger.debug({ count: entries.length, ...Object.fromEntries(filterParts.map((f) => f.split('='))) }, 'query_racf_audit');
-        return textResult(formatStructuredResponse('RACF Audit Query', [
-            {
-                heading: `Records — ${entries.length} matched${filterLine}`,
-                body: renderTable(['Timestamp', 'User', 'Class', 'Event', 'Resource', 'Result'], rows),
-            },
-        ]));
-    }));
-};
+        ctx.logger.debug(
+            { count: entries.length, ...Object.fromEntries(filterParts.map((f) => f.split('='))) },
+            'query_racf_audit',
+        );
+        return textResult(
+            formatStructuredResponse('RACF Audit Query', [
+                {
+                    heading: `Records — ${entries.length} matched${filterLine}`,
+                    body: renderTable(
+                        ['Timestamp', 'User', 'Class', 'Event', 'Resource', 'Result'],
+                        rows,
+                    ),
+                },
+            ]),
+        );
+    },
+});

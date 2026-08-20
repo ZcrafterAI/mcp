@@ -4,9 +4,11 @@
 import type { CicsRegion, CicsTransaction } from '../../types/zos.js';
 import type { ToolContext } from '../../types/tools.js';
 import { ValidationError } from '../../utils/errors.js';
-import { parseCmciXml } from '../../utils/cmci-parser.js';
-import type { CmciRecord } from '../../utils/cmci-parser.js';
-import { createEndpointSession, getText, requireCmciContext } from '../../zowe/rest-client.js';
+import { parseCmciXml } from '../../parsers/cmci.js';
+import type { CmciRecord } from '../../parsers/cmci.js';
+import { createEndpointSession } from '../../zowe/session.js';
+import { getText } from '../../zowe/rest-client.js';
+import { requireCmciContext } from '../../zowe/requirements.js';
 /** Normalize a CICS APPLID: trim and uppercase. */
 export function normalizeApplid(applid: string): string {
     return applid.trim().toUpperCase();
@@ -18,17 +20,18 @@ export function normalizeApplid(applid: string): string {
 export function assertValidApplid(applid: string): void {
     const normalized = normalizeApplid(applid);
     if (!normalized || normalized.length > 8 || !/^[A-Z0-9@#$]{1,8}$/.test(normalized)) {
-        throw new ValidationError(`Invalid CICS APPLID "${applid}". Must be 1–8 alphanumeric characters (A-Z, 0-9, @, #, $).`, { applid });
+        throw new ValidationError(
+            `Invalid CICS APPLID "${applid}". Must be 1–8 alphanumeric characters (A-Z, 0-9, @, #, $).`,
+            { applid },
+        );
     }
 }
 /** Normalize a raw CMCI status string to a consistent uppercase value. */
 export function normalizeCicsStatus(status: string | undefined): string {
     const upper = (status ?? 'UNKNOWN').trim().toUpperCase();
     // CMCI returns a variety of spellings; canonicalize common ones.
-    if (upper === 'ACTIVE' || upper === 'ENABLED')
-        return 'ACTIVE';
-    if (upper === 'INACTIVE' || upper === 'DISABLED')
-        return 'INACTIVE';
+    if (upper === 'ACTIVE' || upper === 'ENABLED') return 'ACTIVE';
+    if (upper === 'INACTIVE' || upper === 'DISABLED') return 'INACTIVE';
     return upper;
 }
 function mapRegion(record: CmciRecord) {
@@ -59,7 +62,11 @@ function cmciPath(context: string, resource: string, scope = '*'): string {
     return `/${resource}/${encodeURIComponent(context)}/${encodeURIComponent(scope)}/`;
 }
 /** List CICS regions in a CMCI context with optional status filter. */
-export async function listCicsRegions(ctx: ToolContext, context?: string, statusFilter?: string): Promise<CicsRegion[]> {
+export async function listCicsRegions(
+    ctx: ToolContext,
+    context?: string,
+    statusFilter?: string,
+): Promise<CicsRegion[]> {
     const cmciContext = requireCmciContext(ctx.config, context);
     const session = createEndpointSession(ctx.config, 'cmci');
     const xml = await getText(session, cmciPath(cmciContext, 'CICSRegion'));
@@ -71,7 +78,11 @@ export async function listCicsRegions(ctx: ToolContext, context?: string, status
     return regions;
 }
 /** Get status for a specific CICS region APPLID. */
-export async function getCicsRegion(ctx: ToolContext, region: string, context?: string): Promise<CicsRegion> {
+export async function getCicsRegion(
+    ctx: ToolContext,
+    region: string,
+    context?: string,
+): Promise<CicsRegion> {
     assertValidApplid(region);
     const normalizedApplid = normalizeApplid(region);
     const cmciContext = requireCmciContext(ctx.config, context);
@@ -84,7 +95,13 @@ export async function getCicsRegion(ctx: ToolContext, region: string, context?: 
     return records[0];
 }
 /** List transactions in a CICS region with optional prefix and status filter. */
-export async function listCicsTransactions(ctx: ToolContext, region: string, context?: string, tranPrefix?: string, statusFilter?: string): Promise<CicsTransaction[]> {
+export async function listCicsTransactions(
+    ctx: ToolContext,
+    region: string,
+    context?: string,
+    tranPrefix?: string,
+    statusFilter?: string,
+): Promise<CicsTransaction[]> {
     assertValidApplid(region);
     const normalizedApplid = normalizeApplid(region);
     const cmciContext = requireCmciContext(ctx.config, context);

@@ -1,11 +1,10 @@
 /**
  * `get_dataset_info` — catalog attributes for a dataset without reading content.
  */
-import type { ToolRegistrar } from '../../types/tools.js';
 import { z } from 'zod';
+import { defineTool } from '../define-tool.js';
 import { formatDatasetInfo, textResult } from '../../utils/formatters.js';
-import { assertDatasetAllowed } from '../../utils/security.js';
-import { securedHandler } from '../../utils/tool-handler.js';
+import { assertDatasetAllowed } from '../../policy/rules.js';
 import { getDatasetInfo, listMembersWithStats, normalizeDatasetName } from './shared.js';
 const RECENT_MEMBER_COUNT = 5;
 const inputShape = {
@@ -13,10 +12,18 @@ const inputShape = {
     includeMembers: z
         .boolean()
         .optional()
-        .describe('For PDS/PDSE: also retrieve member count and the 5 most-recently-modified members.'),
+        .describe(
+            'For PDS/PDSE: also retrieve member count and the 5 most-recently-modified members.',
+        ),
 };
-export const registerDatasetInfoTool: ToolRegistrar = (server, ctx) => {
-    server.tool('get_dataset_info', 'Get catalog attributes (DSORG, type, RECFM, LRECL, BLKSIZE, volume) for a dataset without reading its content. Optionally includes member summary for PDS/PDSE.', inputShape, securedHandler(ctx, 'get_dataset_info', async ({ dsn, includeMembers }) => {
+
+export const getDatasetInfoTool = defineTool({
+    name: 'get_dataset_info',
+    description:
+        'Get catalog attributes (DSORG, type, RECFM, LRECL, BLKSIZE, volume) for a dataset without reading its content. Optionally includes member summary for PDS/PDSE.',
+    input: inputShape,
+    resources: ({ dsn }) => ({ dataset: dsn }),
+    async run({ dsn, includeMembers }, ctx) {
         const normalizedDsn = normalizeDatasetName(dsn);
         assertDatasetAllowed(ctx.config, normalizedDsn);
         const info = await getDatasetInfo(ctx, normalizedDsn);
@@ -31,8 +38,7 @@ export const registerDatasetInfoTool: ToolRegistrar = (server, ctx) => {
                 const sorted = allMembers.slice().sort((a, b) => {
                     const da = a.modified ?? '';
                     const db = b.modified ?? '';
-                    if (db !== da)
-                        return db.localeCompare(da);
+                    if (db !== da) return db.localeCompare(da);
                     return a.name.localeCompare(b.name);
                 });
                 memberData = {
@@ -42,5 +48,5 @@ export const registerDatasetInfoTool: ToolRegistrar = (server, ctx) => {
             }
         }
         return textResult(formatDatasetInfo(info, memberData));
-    }, ({ dsn }) => ({ dataset: dsn })));
-};
+    },
+});

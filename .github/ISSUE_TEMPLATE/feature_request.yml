@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new tool or capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: Describe the task, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: If this is a new tool, what should it be called and what should it return?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Batch jobs
+        - Datasets
+        - Unix files (USS)
+        - Day-to-day operations
+        - Deeper analysis
+        - CICS
+        - Db2
+        - Performance metrics
+        - Security and audit
+        - Something else

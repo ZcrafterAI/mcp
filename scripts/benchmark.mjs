@@ -14,8 +14,7 @@ const config = configSchema.parse({
 });
 const logger = pino({ level: 'silent' });
 
-for (let index = 0; index < 20; index += 1)
-    buildServer(config, logger);
+for (let index = 0; index < 20; index += 1) buildServer(config, logger);
 
 const samples = [];
 for (let index = 0; index < 200; index += 1) {
@@ -35,17 +34,23 @@ async function simulatedReads(concurrency) {
 
 const serialMs = await simulatedReads(1);
 const boundedMs = await simulatedReads(config.limits.maxConcurrentRequests);
-console.log(JSON.stringify({
-    serverBuild: {
-        runs: samples.length,
-        medianMs: Number(samples[99].toFixed(3)),
-        p95Ms: Number(samples[189].toFixed(3)),
-    },
-    diagnosticReads: {
-        operations: 12,
-        concurrency: config.limits.maxConcurrentRequests,
-        serialMs: Number(serialMs.toFixed(1)),
-        boundedMs: Number(boundedMs.toFixed(1)),
-        speedup: Number((serialMs / boundedMs).toFixed(2)),
-    },
-}, null, 2));
+console.log(
+    JSON.stringify(
+        {
+            serverBuild: {
+                runs: samples.length,
+                medianMs: Number(samples[99].toFixed(3)),
+                p95Ms: Number(samples[189].toFixed(3)),
+            },
+            diagnosticReads: {
+                operations: 12,
+                concurrency: config.limits.maxConcurrentRequests,
+                serialMs: Number(serialMs.toFixed(1)),
+                boundedMs: Number(boundedMs.toFixed(1)),
+                speedup: Number((serialMs / boundedMs).toFixed(2)),
+            },
+        },
+        null,
+        2,
+    ),
+);
